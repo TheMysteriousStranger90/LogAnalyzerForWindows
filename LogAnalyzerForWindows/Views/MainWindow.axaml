@@ -15,6 +15,11 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <StackPanel>
+        <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SelectedLogLevel}" />
+        <ComboBox x:Name="TimeList" SelectedIndex="0" ItemsSource="{Binding Times}" SelectedItem="{Binding SelectedTime}" />
+        <Button Command="{Binding StartCommand}" Content="Start" />
+        <Button Command="{Binding StopCommand}" Content="Stop" />
+    </StackPanel>
 
 </Window>

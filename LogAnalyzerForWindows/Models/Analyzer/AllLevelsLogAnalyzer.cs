@@ -1,4 +1,7 @@
-﻿namespace LogAnalyzerForWindows;
+﻿using System;
+using System.Collections.Generic;
+
+namespace LogAnalyzerForWindows.Models.Analyzer;
 
 public class AllLevelsLogAnalyzer : LogAnalyzer
 {

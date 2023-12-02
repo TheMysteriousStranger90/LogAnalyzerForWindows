@@ -1,7 +1,8 @@
-﻿using System.Xml.Serialization;
-using LogAnalyzerForWindows.Formatter.Interfaces;
+﻿using System.IO;
+using System.Xml.Serialization;
+using LogAnalyzerForWindows.Models.Formatter.Interfaces;
 
-namespace LogAnalyzerForWindows.Formatter;
+namespace LogAnalyzerForWindows.Models.Formatter;
 
 public class XmlLogFormatter : ILogFormatter
 {

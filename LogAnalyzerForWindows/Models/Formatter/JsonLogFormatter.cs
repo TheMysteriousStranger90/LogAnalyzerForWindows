@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
-using LogAnalyzerForWindows.Formatter.Interfaces;
+using LogAnalyzerForWindows.Models.Formatter.Interfaces;
 
-namespace LogAnalyzerForWindows.Formatter;
+namespace LogAnalyzerForWindows.Models.Formatter;
 
 public class JsonLogFormatter : ILogFormatter
 {

@@ -2,5 +2,5 @@
 
 public interface ILogWriter
 {
-    
+    void Write(LogEntry log);
 }

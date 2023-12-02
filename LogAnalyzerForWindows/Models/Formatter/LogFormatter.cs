@@ -1,6 +1,6 @@
-﻿using LogAnalyzerForWindows.Formatter.Interfaces;
+﻿using LogAnalyzerForWindows.Models.Formatter.Interfaces;
 
-namespace LogAnalyzerForWindows;
+namespace LogAnalyzerForWindows.Models.Formatter;
 
 public class LogFormatter : ILogFormatter
 {
