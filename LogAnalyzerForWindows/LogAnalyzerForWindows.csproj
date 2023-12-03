@@ -1,4 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<!-- 
+    Author: Bohdan Harabadzhyu
+    Description: This is a Log Analyzer for Windows.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>net7.0</TargetFramework>
@@ -7,15 +11,11 @@
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     </PropertyGroup>
-
-    <ItemGroup>
-        <AvaloniaResource Include="Assets\**"/>
-    </ItemGroup>
-
-
+    
     <ItemGroup>
         <PackageReference Include="Avalonia" Version="11.0.2"/>
         <PackageReference Include="Avalonia.Desktop" Version="11.0.2"/>
+        <PackageReference Include="Avalonia.Svg.Skia" Version="11.0.0.6" />
         <PackageReference Include="Avalonia.Themes.Fluent" Version="11.0.2"/>
         <PackageReference Include="Avalonia.Fonts.Inter" Version="11.0.2"/>
         <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
@@ -23,5 +23,10 @@
         <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.2"/>
 
         <PackageReference Include="System.Management" Version="7.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AvaloniaResource Include="Styles\**" />
+        <AvaloniaResource Include="Assets\**" />
     </ItemGroup>
 </Project>

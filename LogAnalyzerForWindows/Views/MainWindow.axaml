@@ -6,20 +6,53 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="LogAnalyzerForWindows.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="LogAnalyzerForWindows">
+        Icon="/Assets/icon.ico"
+        Opacity="0.9"
+        Title="Log Analyzer For Windows">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,
              to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
+    <Window.Styles>
+        <StyleInclude Source="/Styles/Styles.axaml" />
+    </Window.Styles>
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-    <StackPanel>
-        <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SelectedLogLevel}" />
-        <ComboBox x:Name="TimeList" SelectedIndex="0" ItemsSource="{Binding Times}" SelectedItem="{Binding SelectedTime}" />
-        <Button Command="{Binding StartCommand}" Content="Start" />
-        <Button Command="{Binding StopCommand}" Content="Stop" />
-    </StackPanel>
+        <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal">
+            <StackPanel Orientation="Vertical" Margin="20,0,10,0">
+                <Label Content="Log:" />
+                <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SelectedLogLevel}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Vertical">
+                <Label Content="Time:" />
+                <ComboBox x:Name="TimeList" SelectedIndex="0" ItemsSource="{Binding Times}" SelectedItem="{Binding SelectedTime}" />
+            </StackPanel>
+        </StackPanel>
+
+        <TextBox x:Name="Output" Grid.Row="1" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}" ScrollViewer.VerticalScrollBarVisibility="Auto" IsReadOnly="True" HorizontalAlignment="Center" />
+
+        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Command="{Binding StartCommand}" Margin="10">
+                <Image Source="{SvgImage /Assets/play.svg}" Width="25" Height="25"/>
+            </Button>
+            <Button Command="{Binding StopCommand}" Margin="10">
+                <Image Source="{SvgImage /Assets/pause.svg}" Width="25" Height="25" />
+            </Button>
+        </StackPanel>
+    </Grid>
 
 </Window>

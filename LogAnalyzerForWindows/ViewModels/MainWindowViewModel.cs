@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Collections;
@@ -28,6 +29,20 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
     public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "All time" };
+    
+    private string _outputText;
+    public string OutputText
+    {
+        get { return _outputText; }
+        set
+        {
+            if (value != _outputText)
+            {
+                _outputText = value;
+                OnPropertyChanged(nameof(OutputText));
+            }
+        }
+    }
 
     public string SelectedLogLevel
     {
@@ -85,6 +100,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public MainWindowViewModel()
     {
+        Debug.WriteLine("MainWindowViewModel constructor called.");
         _monitor = new LogMonitor();
 
         StartCommand = new RelayCommand(StartMonitoring);
@@ -93,6 +109,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     private void StartMonitoring()
     {
+        Debug.WriteLine("StartMonitoring called.");
         ILogReader reader = new WindowsEventLogReader("System");
         LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
         ILogFormatter formatter = new LogFormatter();
