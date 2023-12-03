@@ -7,10 +7,8 @@ namespace LogAnalyzerForWindows.Views;
 
 public partial class MainWindow : Window
 {
-    private MainWindowViewModel viewModel => (MainWindowViewModel)DataContext;
     public MainWindow()
     {
-        Debug.WriteLine("Initializing main window.");
         InitializeComponent();
         DataContext = new MainWindowViewModel();
     }

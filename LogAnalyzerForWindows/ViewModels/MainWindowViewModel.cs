@@ -40,7 +40,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
-    public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "All time" };
+    public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
 
     public AvaloniaList<string> Formats { get; } = new AvaloniaList<string> { "txt", "json" };
 
@@ -206,8 +206,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 case "Last 24 hours":
                     timeSpan = TimeSpan.FromDays(1);
                     break;
-                case "All time":
-                    timeSpan = TimeSpan.MaxValue;
+                case "Last 3 days":
+                    timeSpan = TimeSpan.FromDays(3); 
                     break;
                 default:
                     throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
