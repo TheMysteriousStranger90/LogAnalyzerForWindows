@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Collections;
@@ -37,7 +39,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "All time" };
 
-    public AvaloniaList<string> Formats { get; } = new AvaloniaList<string> { "txt", "json", "xml" };
+    public AvaloniaList<string> Formats { get; } = new AvaloniaList<string> { "txt", "json" };
 
     private string _outputText;
 
@@ -50,6 +52,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             {
                 _outputText = value;
                 OnPropertyChanged(nameof(OutputText));
+                CanSave = !string.IsNullOrEmpty(_outputText);
             }
         }
     }
@@ -119,7 +122,22 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             }
         }
     }
-    
+
+    private bool _canSave;
+
+    public bool CanSave
+    {
+        get { return _canSave; }
+        set
+        {
+            if (value != _canSave)
+            {
+                _canSave = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public string SelectedFormat { get; set; }
 
     private LogMonitor _monitor;
@@ -198,6 +216,10 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     {
         _monitor.StopMonitoring();
 
+        SelectedLogLevel = null;
+        SelectedTime = null;
+        IsLoading = false;
+
         ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
         ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }
@@ -213,15 +235,28 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             case "json":
                 formatter = new JsonLogFormatter();
                 break;
-            case "xml":
-                formatter = new XmlLogFormatter();
-                break;
             default:
                 throw new InvalidOperationException($"Unknown format: {SelectedFormat}");
         }
 
         var logEntries = OutputText.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => new LogEntry { Message = line });
+            .Select(line =>
+            {
+                var match = Regex.Match(line,
+                    @"^(?<timestamp>\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}) (?<level>\w+) (?<message>.+)$");
+                if (match.Success)
+                {
+                    var timestamp = DateTime.ParseExact(match.Groups["timestamp"].Value, "dd.MM.yyyy HH:mm:ss",
+                        CultureInfo.InvariantCulture);
+                    var level = match.Groups["level"].Value;
+                    var message = match.Groups["message"].Value;
+                    return new LogEntry { Timestamp = timestamp, Level = level, Message = message };
+                }
+                else
+                {
+                    return new LogEntry { Message = line };
+                }
+            });
 
         var formattedLogs = logEntries.Select(log => formatter.Format(log).Message);
 
