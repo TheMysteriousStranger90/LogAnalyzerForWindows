@@ -11,8 +11,6 @@
         Title="Log Analyzer For Windows">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
@@ -22,6 +20,7 @@
     
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" /> <!-- New row for ProgressBar -->
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -32,7 +31,9 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal">
+        <ProgressBar x:Name="LoadingSpinner" Grid.Row="0" Grid.ColumnSpan="2" IsIndeterminate="True" IsVisible="{Binding IsLoading}" />
+
+        <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal">
             <StackPanel Orientation="Vertical" Margin="20,0,10,0">
                 <Label Content="Log:" />
                 <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SelectedLogLevel}" />
@@ -44,9 +45,11 @@
             </StackPanel>
         </StackPanel>
 
-        <TextBox x:Name="Output" Grid.Row="1" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}" ScrollViewer.VerticalScrollBarVisibility="Auto" IsReadOnly="True" HorizontalAlignment="Center" />
+        <TextBox x:Name="Output" Grid.Row="2" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}" 
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" 
+                 IsReadOnly="True" HorizontalAlignment="Center" />
 
-        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Command="{Binding StartCommand}" Margin="10">
                 <Image Source="{SvgImage /Assets/play.svg}" Width="25" Height="25"/>
             </Button>
@@ -55,5 +58,4 @@
             </Button>
         </StackPanel>
     </Grid>
-
 </Window>

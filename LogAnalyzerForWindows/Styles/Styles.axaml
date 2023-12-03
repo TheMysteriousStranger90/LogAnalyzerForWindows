@@ -26,4 +26,25 @@
         <Setter Property="Foreground" Value="#31A8FF" />
         <Setter Property="Background" Value="#2E2E2E" />
     </Style>
+    
+    <Style Selector="TextBox">
+        <Setter Property="Foreground" Value="#FFFFFFFF" />
+        <Setter Property="BorderThickness" Value="2" />
+
+        <Setter Property="BorderBrush" Value="#31A8FF" />
+        <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    
+    <Style Selector="Window">
+        <Setter Property="Background" Value="#2E2E2E" />
+    </Style>
+    
+    <Style Selector="ProgressBar">
+        <Setter Property="Height" Value="20"/>
+        <Setter Property="Foreground" Value="#31A8FF"/>
+        <Setter Property="Background" Value="#FFFFFFFF"/>
+        <Setter Property="BorderBrush" Value="#31A8FF"/>
+        <Setter Property="BorderThickness" Value="2"/>
+    </Style>
+    
 </Styles>

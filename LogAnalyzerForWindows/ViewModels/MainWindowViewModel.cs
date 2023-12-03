@@ -27,13 +27,15 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private string _selectedTime;
     private ICommand _startCommand;
     private ICommand _stopCommand;
-    
+
     //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
-    public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
+    public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
+        { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
     public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "All time" };
-    
+
     private string _outputText;
+
     public string OutputText
     {
         get { return _outputText; }
@@ -72,6 +74,18 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 OnPropertyChanged();
                 ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
             }
+        }
+    }
+
+    private bool _isLoading;
+
+    public bool IsLoading
+    {
+        get { return _isLoading; }
+        set
+        {
+            _isLoading = value;
+            OnPropertyChanged();
         }
     }
 
@@ -114,7 +128,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
     }
-    
+
     private bool CanStartMonitoring()
     {
         return SelectedLogLevel != null && SelectedTime != null;
@@ -128,12 +142,13 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private async void StartMonitoring()
     {
         Debug.WriteLine("StartMonitoring called.");
+        IsLoading = true;
         await Task.Run(() =>
         {
             ILogReader reader = new WindowsEventLogReader("System");
             LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
             ILogFormatter formatter = new LogFormatter();
-            ILogWriter writer = new ConsoleLogWriter(formatter);
+            ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputText);
 
             LogManager manager = new LogManager(reader, analyzer, formatter, writer);
 
@@ -155,15 +170,20 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
             TimeFilter filter = new TimeFilter(timeSpan);
 
-            _monitor.LogsChanged += logs =>
+            _monitor.LogsChanged -= OnLogsChanged;
+            _monitor.LogsChanged += OnLogsChanged;
+
+            void OnLogsChanged(IEnumerable<LogEntry> logs)
             {
                 var filteredLogs = filter.Filter(logs);
                 manager.ProcessLogs(filteredLogs);
-            };
+            }
 
             _monitor.Monitor(reader);
         });
-        
+
+        IsLoading = false;
+
         ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
         ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }
@@ -171,18 +191,18 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private void StopMonitoring()
     {
         _monitor.StopMonitoring();
-        
+
         ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
         ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }
-    
+
     public event PropertyChangedEventHandler PropertyChanged;
 
     private void OnPropertyChanged([CallerMemberName] string propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
-    
+
     private void OnMonitoringStartedOrStopped()
     {
         Dispatcher.UIThread.InvokeAsync(() =>
@@ -190,5 +210,11 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
             ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
         });
+    }
+
+    private void UpdateOutputText(string text)
+    {
+        OutputText += text + Environment.NewLine;
+        IsLoading = false;
     }
 }
