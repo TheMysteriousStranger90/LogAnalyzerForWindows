@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Collections;
 using LogAnalyzerForWindows.Commands;
@@ -26,6 +27,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private ICommand _startCommand;
     private ICommand _stopCommand;
     
+    //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
     public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "All time" };
@@ -107,41 +109,44 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         StopCommand = new RelayCommand(StopMonitoring);
     }
 
-    private void StartMonitoring()
+    private async void StartMonitoring()
     {
         Debug.WriteLine("StartMonitoring called.");
-        ILogReader reader = new WindowsEventLogReader("System");
-        LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
-        ILogFormatter formatter = new LogFormatter();
-        ILogWriter writer = new ConsoleLogWriter(formatter);
-
-        LogManager manager = new LogManager(reader, analyzer, formatter, writer);
-
-        TimeSpan timeSpan;
-        switch (SelectedTime)
+        await Task.Run(() =>
         {
-            case "Last hour":
-                timeSpan = TimeSpan.FromHours(1);
-                break;
-            case "Last 24 hours":
-                timeSpan = TimeSpan.FromDays(1);
-                break;
-            case "All time":
-                timeSpan = TimeSpan.MaxValue;
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
-        }
+            ILogReader reader = new WindowsEventLogReader("System");
+            LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
+            ILogFormatter formatter = new LogFormatter();
+            ILogWriter writer = new ConsoleLogWriter(formatter);
 
-        TimeFilter filter = new TimeFilter(timeSpan);
+            LogManager manager = new LogManager(reader, analyzer, formatter, writer);
 
-        _monitor.LogsChanged += logs =>
-        {
-            var filteredLogs = filter.Filter(logs);
-            manager.ProcessLogs(filteredLogs);
-        };
+            TimeSpan timeSpan;
+            switch (SelectedTime)
+            {
+                case "Last hour":
+                    timeSpan = TimeSpan.FromHours(1);
+                    break;
+                case "Last 24 hours":
+                    timeSpan = TimeSpan.FromDays(1);
+                    break;
+                case "All time":
+                    timeSpan = TimeSpan.MaxValue;
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
+            }
 
-        _monitor.Monitor(reader);
+            TimeFilter filter = new TimeFilter(timeSpan);
+
+            _monitor.LogsChanged += logs =>
+            {
+                var filteredLogs = filter.Filter(logs);
+                manager.ProcessLogs(filteredLogs);
+            };
+
+            _monitor.Monitor(reader);
+        });
     }
 
     private void StopMonitoring()
