@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -27,12 +29,15 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private string _selectedTime;
     private ICommand _startCommand;
     private ICommand _stopCommand;
+    public ICommand SaveCommand => new RelayCommand(Save);
 
     //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
     public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "All time" };
+
+    public AvaloniaList<string> Formats { get; } = new AvaloniaList<string> { "txt", "json", "xml" };
 
     private string _outputText;
 
@@ -114,12 +119,13 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             }
         }
     }
+    
+    public string SelectedFormat { get; set; }
 
     private LogMonitor _monitor;
 
     public MainWindowViewModel()
     {
-        Debug.WriteLine("MainWindowViewModel constructor called.");
         _monitor = new LogMonitor();
 
         _monitor.MonitoringStarted += OnMonitoringStartedOrStopped;
@@ -194,6 +200,44 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
         ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
+    }
+
+    private void Save()
+    {
+        ILogFormatter formatter;
+        switch (SelectedFormat)
+        {
+            case "txt":
+                formatter = new LogFormatter();
+                break;
+            case "json":
+                formatter = new JsonLogFormatter();
+                break;
+            case "xml":
+                formatter = new XmlLogFormatter();
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown format: {SelectedFormat}");
+        }
+
+        var logEntries = OutputText.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => new LogEntry { Message = line }); // Предполагается, что каждая строка - это сообщение лога
+
+        var formattedLogs = logEntries.Select(log => formatter.Format(log).Message);
+
+        string logs = string.Join(Environment.NewLine, formattedLogs);
+
+        string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "LogAnalyzerForWindows");
+        Directory.CreateDirectory(defaultPath);
+
+        string deviceFolderPath = Path.Combine(defaultPath, $"{DateTime.Now:yyyyMMdd}");
+        Directory.CreateDirectory(deviceFolderPath);
+
+        string fileName = $"output_{DateTime.Now}.{SelectedFormat}";
+        string filePath = Path.Combine(deviceFolderPath, fileName);
+
+        File.WriteAllText(filePath, logs);
     }
 
     public event PropertyChangedEventHandler PropertyChanged;
