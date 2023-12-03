@@ -33,6 +33,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private ICommand _stopCommand;
     public ICommand SaveCommand => new RelayCommand(Save);
     public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
+    
+    private FileSystemWatcher _folderWatcher;
 
     //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
@@ -161,6 +163,15 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
+        
+        _folderWatcher = new FileSystemWatcher(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments))
+        {
+            Filter = "LogAnalyzerForWindows",
+            NotifyFilter = NotifyFilters.DirectoryName
+        };
+        _folderWatcher.Created += OnFolderChanged;
+        _folderWatcher.Deleted += OnFolderChanged;
+        _folderWatcher.EnableRaisingEvents = true;
     }
 
     private bool CanStartMonitoring()
@@ -304,6 +315,11 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+    
+    private void OnFolderChanged(object sender, FileSystemEventArgs e)
+    {
+        OnPropertyChanged(nameof(IsFolderExists));
     }
 
     private void OnMonitoringStartedOrStopped()
