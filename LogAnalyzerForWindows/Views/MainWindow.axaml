@@ -56,6 +56,12 @@
                     <Image Source="{SvgImage /Assets/save.svg}" Width="25" Height="25"/>
                 </Button>
             </StackPanel>
+            
+            <StackPanel Orientation="Vertical">
+            <Button Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="10,20,0,0" >
+                <Image Source="{SvgImage /Assets/folder-plus.svg}" Width="25" Height="25"/>
+            </Button>
+            </StackPanel>
         </StackPanel>
         
         <TextBox x:Name="Output" Grid.Row="2" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}" 

@@ -32,6 +32,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private ICommand _startCommand;
     private ICommand _stopCommand;
     public ICommand SaveCommand => new RelayCommand(Save);
+    public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
 
     //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
@@ -94,6 +95,15 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         {
             _isLoading = value;
             OnPropertyChanged();
+        }
+    }
+    
+    public bool IsFolderExists
+    {
+        get
+        {
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+            return Directory.Exists(defaultPath);
         }
     }
 
@@ -273,6 +283,20 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         string filePath = Path.Combine(deviceFolderPath, fileName);
 
         File.WriteAllText(filePath, logs);
+    }
+    
+    public void OpenFolder()
+    {
+        string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+        if (Directory.Exists(defaultPath))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = defaultPath,
+                UseShellExecute = true,
+                Verb = "open"
+            });
+        }
     }
 
     public event PropertyChangedEventHandler PropertyChanged;
