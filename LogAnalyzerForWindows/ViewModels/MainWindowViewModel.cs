@@ -38,9 +38,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     private FileSystemWatcher _folderWatcher;
 
-    //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
-    public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
-        { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
+    public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
+    //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
     public AvaloniaList<string> Times { get; } =
         new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
@@ -225,7 +224,10 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             void OnLogsChanged(IEnumerable<LogEntry> logs)
             {
                 var filteredLogs = filter.Filter(logs);
-                manager.ProcessLogs(filteredLogs);
+                LevelLogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
+                var levelLogs = analyzer.FilterByLevel(filteredLogs);
+                LogManager manager = new LogManager(reader, analyzer, formatter, writer);
+                manager.ProcessLogs(levelLogs);
             }
 
             _monitor.Monitor(reader);
@@ -251,53 +253,65 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     private void Save()
     {
-        ILogFormatter formatter;
-        switch (SelectedFormat)
+        try
         {
-            case "txt":
-                formatter = new LogFormatter();
-                break;
-            case "json":
-                formatter = new JsonLogFormatter();
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown format: {SelectedFormat}");
-        }
-
-        var logEntries = OutputText.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(line =>
+            if (string.IsNullOrEmpty(SelectedFormat))
             {
-                var match = Regex.Match(line,
-                    @"^(?<timestamp>\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}) (?<level>\w+) (?<message>.+)$");
-                if (match.Success)
+                return;
+            }
+
+            ILogFormatter formatter;
+            switch (SelectedFormat)
+            {
+                case "txt":
+                    formatter = new LogFormatter();
+                    break;
+                case "json":
+                    formatter = new JsonLogFormatter();
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown format: {SelectedFormat}");
+            }
+
+            var logEntries = OutputText.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line =>
                 {
-                    var timestamp = DateTime.ParseExact(match.Groups["timestamp"].Value, "dd.MM.yyyy HH:mm:ss",
-                        CultureInfo.InvariantCulture);
-                    var level = match.Groups["level"].Value;
-                    var message = match.Groups["message"].Value;
-                    return new LogEntry { Timestamp = timestamp, Level = level, Message = message };
-                }
-                else
-                {
-                    return new LogEntry { Message = line };
-                }
-            });
+                    var match = Regex.Match(line,
+                        @"^(?<timestamp>\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}) (?<level>\w+) (?<message>.+)$");
+                    if (match.Success)
+                    {
+                        var timestamp = DateTime.ParseExact(match.Groups["timestamp"].Value, "dd.MM.yyyy HH:mm:ss",
+                            CultureInfo.InvariantCulture);
+                        var level = match.Groups["level"].Value;
+                        var message = match.Groups["message"].Value;
+                        return new LogEntry { Timestamp = timestamp, Level = level, Message = message };
+                    }
+                    else
+                    {
+                        return new LogEntry { Message = line };
+                    }
+                });
 
-        var formattedLogs = logEntries.Select(log => formatter.Format(log).Message);
+            var formattedLogs = logEntries.Select(log => formatter.Format(log).Message);
 
-        string logs = string.Join(Environment.NewLine, formattedLogs);
+            string logs = string.Join(Environment.NewLine, formattedLogs);
 
-        string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "LogAnalyzerForWindows");
-        Directory.CreateDirectory(defaultPath);
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "LogAnalyzerForWindows");
+            Directory.CreateDirectory(defaultPath);
 
-        string deviceFolderPath = Path.Combine(defaultPath, $"{DateTime.Now:yyyyMMdd}");
-        Directory.CreateDirectory(deviceFolderPath);
+            string deviceFolderPath = Path.Combine(defaultPath, $"{DateTime.Now:yyyyMMdd}");
+            Directory.CreateDirectory(deviceFolderPath);
 
-        string fileName = $"output_{DateTime.Now:yyyyMMdd_HHmmss}.{SelectedFormat}";
-        string filePath = Path.Combine(deviceFolderPath, fileName);
+            string fileName = $"output_{DateTime.Now:yyyyMMdd_HHmmss}.{SelectedFormat}";
+            string filePath = Path.Combine(deviceFolderPath, fileName);
 
-        File.WriteAllText(filePath, logs);
+            File.WriteAllText(filePath, logs);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"An error occurred: {ex.Message}");
+        }
     }
 
     public void OpenFolder()
