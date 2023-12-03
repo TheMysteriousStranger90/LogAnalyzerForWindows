@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Collections;
+using Avalonia.Threading;
 using LogAnalyzerForWindows.Commands;
 using LogAnalyzerForWindows.Models;
 using LogAnalyzerForWindows.Models.Analyzer;
@@ -55,6 +56,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             {
                 _selectedLogLevel = value;
                 OnPropertyChanged();
+                ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
             }
         }
     }
@@ -68,6 +70,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             {
                 _selectedTime = value;
                 OnPropertyChanged();
+                ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
             }
         }
     }
@@ -105,8 +108,21 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         Debug.WriteLine("MainWindowViewModel constructor called.");
         _monitor = new LogMonitor();
 
-        StartCommand = new RelayCommand(StartMonitoring);
-        StopCommand = new RelayCommand(StopMonitoring);
+        _monitor.MonitoringStarted += OnMonitoringStartedOrStopped;
+        _monitor.MonitoringStopped += OnMonitoringStartedOrStopped;
+
+        StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
+        StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
+    }
+    
+    private bool CanStartMonitoring()
+    {
+        return SelectedLogLevel != null && SelectedTime != null;
+    }
+
+    private bool CanStopMonitoring()
+    {
+        return _monitor.IsMonitoring;
     }
 
     private async void StartMonitoring()
@@ -147,11 +163,17 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
             _monitor.Monitor(reader);
         });
+        
+        ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }
 
     private void StopMonitoring()
     {
         _monitor.StopMonitoring();
+        
+        ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }
     
     public event PropertyChangedEventHandler PropertyChanged;
@@ -159,5 +181,14 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+    
+    private void OnMonitoringStartedOrStopped()
+    {
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
+        });
     }
 }

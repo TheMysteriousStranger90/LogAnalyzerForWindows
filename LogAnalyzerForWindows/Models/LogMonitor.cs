@@ -9,12 +9,22 @@ namespace LogAnalyzerForWindows.Models;
 public class LogMonitor
 {
     public event Action<IEnumerable<LogEntry>> LogsChanged;
+    public event Action MonitoringStarted;
+    public event Action MonitoringStopped;
 
     private bool _shouldStop = false;
+    private bool _isMonitoring;
+
+    public bool IsMonitoring
+    {
+        get { return _isMonitoring; }
+    }
 
     public void Monitor(ILogReader reader)
     {
         IEnumerable<LogEntry> previousLogs = null;
+        _isMonitoring = true;
+        MonitoringStarted?.Invoke();
 
         while (!_shouldStop)
         {
@@ -33,5 +43,7 @@ public class LogMonitor
     public void StopMonitoring()
     {
         _shouldStop = true;
+        _isMonitoring = false;
+        MonitoringStopped?.Invoke();
     }
 }
