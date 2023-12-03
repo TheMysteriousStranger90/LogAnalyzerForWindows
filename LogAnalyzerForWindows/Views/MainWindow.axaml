@@ -60,9 +60,24 @@
             <StackPanel Orientation="Vertical">
             <Button Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="10,20,0,0" >
                 <Image Source="{SvgImage /Assets/folder-plus.svg}" Width="25" Height="25"/>
+                <ToolTip.Tip>
+                    <TextBlock Text="Opens the LogAnalyzerForWindows directory."/>
+                </ToolTip.Tip>
             </Button>
             </StackPanel>
+            
+            <StackPanel Orientation="Vertical">
+                <Button Command="{Binding ArchiveLatestFolderCommand}" Margin="10,20,0,0">
+                    <Image Source="{SvgImage /Assets/archive.svg}" Width="25" Height="25"/>
+                    <ToolTip.Tip>
+                        <TextBlock Text="Archives the latest folder to a zip file in the LogAnalyzerForWindows directory."/>
+                    </ToolTip.Tip>
+                </Button>
+            </StackPanel>
         </StackPanel>
+        
+
+        
         
         <TextBox x:Name="Output" Grid.Row="2" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}" 
                  ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" 

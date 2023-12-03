@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
@@ -33,14 +34,16 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private ICommand _stopCommand;
     public ICommand SaveCommand => new RelayCommand(Save);
     public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
-    
+    public ICommand ArchiveLatestFolderCommand => new RelayCommand(ArchiveLatestFolder);
+
     private FileSystemWatcher _folderWatcher;
 
     //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
-    public AvaloniaList<string> Times { get; } = new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
+    public AvaloniaList<string> Times { get; } =
+        new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
 
     public AvaloniaList<string> Formats { get; } = new AvaloniaList<string> { "txt", "json" };
 
@@ -99,12 +102,28 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
-    
+
+    private bool _canSave;
+
+    public bool CanSave
+    {
+        get { return _canSave; }
+        set
+        {
+            if (value != _canSave)
+            {
+                _canSave = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public bool IsFolderExists
     {
         get
         {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "LogAnalyzerForWindows");
             return Directory.Exists(defaultPath);
         }
     }
@@ -135,21 +154,6 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         }
     }
 
-    private bool _canSave;
-
-    public bool CanSave
-    {
-        get { return _canSave; }
-        set
-        {
-            if (value != _canSave)
-            {
-                _canSave = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
     public string SelectedFormat { get; set; }
 
     private LogMonitor _monitor;
@@ -163,7 +167,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
-        
+
         _folderWatcher = new FileSystemWatcher(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments))
         {
             Filter = "LogAnalyzerForWindows",
@@ -207,7 +211,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                     timeSpan = TimeSpan.FromDays(1);
                     break;
                 case "Last 3 days":
-                    timeSpan = TimeSpan.FromDays(3); 
+                    timeSpan = TimeSpan.FromDays(3);
                     break;
                 default:
                     throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
@@ -295,28 +299,53 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         File.WriteAllText(filePath, logs);
     }
-    
+
     public void OpenFolder()
     {
-        string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
-        if (Directory.Exists(defaultPath))
+        try
         {
-            Process.Start(new ProcessStartInfo
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+            if (Directory.Exists(defaultPath))
             {
-                FileName = defaultPath,
-                UseShellExecute = true,
-                Verb = "open"
-            });
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = defaultPath,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"An error occurred: {ex.Message}");
+        }
+    }
+    
+    public void ArchiveLatestFolder()
+    {
+        try
+        {
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+
+            if (Directory.Exists(defaultPath))
+            {
+                var directories = new DirectoryInfo(defaultPath).GetDirectories();
+                
+                var latestDirectory = directories.OrderByDescending(d => d.CreationTime).FirstOrDefault();
+
+                if (latestDirectory != null)
+                {
+                    string zipPath = Path.Combine(defaultPath, $"{latestDirectory.Name}.zip");
+                    ZipFile.CreateFromDirectory(latestDirectory.FullName, zipPath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"An error occurred: {ex.Message}");
         }
     }
 
-    public event PropertyChangedEventHandler PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-    
     private void OnFolderChanged(object sender, FileSystemEventArgs e)
     {
         OnPropertyChanged(nameof(IsFolderExists));
@@ -335,5 +364,12 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     {
         OutputText += text + Environment.NewLine;
         IsLoading = false;
+    }
+
+    public event PropertyChangedEventHandler PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
