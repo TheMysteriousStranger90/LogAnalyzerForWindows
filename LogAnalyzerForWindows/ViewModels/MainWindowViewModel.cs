@@ -189,7 +189,6 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     private async void StartMonitoring()
     {
-        Debug.WriteLine("StartMonitoring called.");
         IsLoading = true;
         await Task.Run(() =>
         {
