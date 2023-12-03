@@ -221,7 +221,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         }
 
         var logEntries = OutputText.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => new LogEntry { Message = line }); // Предполагается, что каждая строка - это сообщение лога
+            .Select(line => new LogEntry { Message = line });
 
         var formattedLogs = logEntries.Select(log => formatter.Format(log).Message);
 
@@ -234,7 +234,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         string deviceFolderPath = Path.Combine(defaultPath, $"{DateTime.Now:yyyyMMdd}");
         Directory.CreateDirectory(deviceFolderPath);
 
-        string fileName = $"output_{DateTime.Now}.{SelectedFormat}";
+        string fileName = $"output_{DateTime.Now:yyyyMMdd_HHmmss}.{SelectedFormat}";
         string filePath = Path.Combine(deviceFolderPath, fileName);
 
         File.WriteAllText(filePath, logs);
