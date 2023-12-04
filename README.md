@@ -19,9 +19,7 @@ This project is a log analyzer for Windows, which reads system logs, filters the
 
 ## Usage
 
-1. Clone the repository
-2. Open the solution in Visual Studio
-3. Build and run the application
+1. To install the LogAnalyzerForWindows application, download the LogAnalyzerForWindows.rar. Extract the .rar file, and run the LogAnalyzerForWindows.exe file on your machine.
 
 ## Contributing
 
