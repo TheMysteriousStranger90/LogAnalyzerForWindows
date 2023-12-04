@@ -378,6 +378,12 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 if (latestDirectory != null)
                 {
                     string zipPath = Path.Combine(defaultPath, $"{latestDirectory.Name}.zip");
+                    
+                    if (File.Exists(zipPath))
+                    {
+                        File.Delete(zipPath);
+                    }
+
                     ZipFile.CreateFromDirectory(latestDirectory.FullName, zipPath);
                 }
             }
