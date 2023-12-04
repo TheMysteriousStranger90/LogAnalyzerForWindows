@@ -114,5 +114,9 @@
                 <Image Source="{SvgImage /Assets/pause.svg}" Width="25" Height="25" />
             </Button>
         </StackPanel>
+        
+        
+        <TextBlock Grid.Row="4" Grid.Column="0" Foreground="#FFFFFFFF" FontSize="14" TextAlignment="Center"
+                   Padding="10" Text="{Binding TextBlock}" />
     </Grid>
 </Window>

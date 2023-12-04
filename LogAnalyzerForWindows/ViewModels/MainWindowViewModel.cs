@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Collections;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using LogAnalyzerForWindows.Commands;
 using LogAnalyzerForWindows.Models;
@@ -36,6 +37,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public ICommand SaveCommand => new RelayCommand(Save);
     public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
     public ICommand ArchiveLatestFolderCommand => new RelayCommand(ArchiveLatestFolder);
+    private Action<IEnumerable<LogEntry>> _onLogsChanged;
     private FileSystemWatcher _folderWatcher;
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
@@ -55,6 +57,21 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
 
     public AvaloniaList<string> Formats { get; } = new AvaloniaList<string> { "txt", "json" };
+    
+    private string _textBlock;
+    
+    public string TextBlock
+    {
+        get { return _textBlock; }
+        set
+        {
+            if (value != _textBlock)
+            {
+                _textBlock = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
     private string _outputText;
 
@@ -222,63 +239,75 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         return _monitor.IsMonitoring;
     }
 
-    private async void StartMonitoring()
+    private void StartMonitoring()
     {
+        Task.Run(async () =>
+        {
         IsLoading = true;
+        TextBlock = "Starting monitoring...";
+
+        ILogReader reader = new WindowsEventLogReader("System");
+        LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
+        ILogFormatter formatter = new LogFormatter();
+        ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputText);
+
+        LogManager manager = new LogManager(reader, analyzer, formatter, writer);
+
+        TimeSpan timeSpan;
+        switch (SelectedTime)
+        {
+            case "Last hour":
+                timeSpan = TimeSpan.FromHours(1);
+                break;
+            case "Last 24 hours":
+                timeSpan = TimeSpan.FromDays(1);
+                break;
+            case "Last 3 days":
+                timeSpan = TimeSpan.FromDays(3);
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
+        }
+
+        TimeFilter filter = new TimeFilter(timeSpan);
+
+        _onLogsChanged = (logs) =>
+        {
+            var filteredLogs = filter.Filter(logs);
+            LevelLogAnalyzer analyzer = new LevelLogAnalyzer(
+                SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
+                    ? LogLevelTranslations[SelectedLogLevel]
+                    : SelectedLogLevel);
+            var levelLogs = analyzer.FilterByLevel(filteredLogs);
+            LogManager manager = new LogManager(reader, analyzer, formatter, writer);
+            manager.ProcessLogs(levelLogs);
+        };
+
+        _monitor.LogsChanged += _onLogsChanged;
+
         await Task.Run(() =>
         {
-            ILogReader reader = new WindowsEventLogReader("System");
-            LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
-            ILogFormatter formatter = new LogFormatter();
-            ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputText);
-
-            LogManager manager = new LogManager(reader, analyzer, formatter, writer);
-
-            TimeSpan timeSpan;
-            switch (SelectedTime)
-            {
-                case "Last hour":
-                    timeSpan = TimeSpan.FromHours(1);
-                    break;
-                case "Last 24 hours":
-                    timeSpan = TimeSpan.FromDays(1);
-                    break;
-                case "Last 3 days":
-                    timeSpan = TimeSpan.FromDays(3);
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
-            }
-
-            TimeFilter filter = new TimeFilter(timeSpan);
-
-            _monitor.LogsChanged -= OnLogsChanged;
-            _monitor.LogsChanged += OnLogsChanged;
-
-            void OnLogsChanged(IEnumerable<LogEntry> logs)
-            {
-                var filteredLogs = filter.Filter(logs);
-                LevelLogAnalyzer analyzer = new LevelLogAnalyzer(
-                    SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
-                        ? LogLevelTranslations[SelectedLogLevel]
-                        : SelectedLogLevel);
-                var levelLogs = analyzer.FilterByLevel(filteredLogs);
-                LogManager manager = new LogManager(reader, analyzer, formatter, writer);
-                manager.ProcessLogs(levelLogs);
-            }
-
             _monitor.Monitor(reader);
         });
 
         IsLoading = false;
+        TextBlock = "Monitoring started.";
 
         ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
         ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
+        });
     }
 
     private void StopMonitoring()
     {
         _monitor.StopMonitoring();
+        TextBlock = "Monitoring stopped.";
+        
+        if (_onLogsChanged != null)
+        {
+            _monitor.LogsChanged -= _onLogsChanged;
+            _onLogsChanged = null;
+        }
 
         SelectedLogLevel = null;
         SelectedTime = null;
@@ -344,10 +373,12 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             string filePath = Path.Combine(deviceFolderPath, fileName);
 
             File.WriteAllText(filePath, logs);
+            TextBlock = "Logs saved successfully.";
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"An error occurred: {ex.Message}");
+            TextBlock = $"An error occurred: {ex.Message}";
         }
     }
 
@@ -366,10 +397,12 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                     Verb = "open"
                 });
             }
+            TextBlock = "Folder opened.";
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"An error occurred: {ex.Message}");
+            TextBlock = $"An error occurred: {ex.Message}";
         }
     }
 
@@ -396,12 +429,14 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                     }
 
                     ZipFile.CreateFromDirectory(latestDirectory.FullName, zipPath);
+                    TextBlock = "Latest folder archived.";
                 }
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"An error occurred: {ex.Message}");
+            TextBlock = $"An error occurred: {ex.Message}";
         }
     }
 
@@ -420,10 +455,12 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
             await emailSender.SendEmailAsync("Recipient Name", UserEmail, "Log Analyzer For Windows", "Latest Zip File",
                 latestZipFile);
+            TextBlock = "Email sent.";
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"An error occurred: {ex.Message}");
+            TextBlock = $"An error occurred: {ex.Message}";
         }
     }
 
