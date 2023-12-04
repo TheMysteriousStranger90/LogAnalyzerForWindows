@@ -21,7 +21,9 @@
         <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
         <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.0.2"/>
         <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.2"/>
-
+        <PackageReference Include="MailKit" Version="4.3.0" />
+        <PackageReference Include="MimeKit" Version="4.3.0" />
+        <PackageReference Include="OfficeOpenXml.Extension.AspNetCore" Version="1.0.0" />
         <PackageReference Include="System.Management" Version="7.0.2" />
     </ItemGroup>
 

@@ -32,13 +32,15 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private string _selectedTime;
     private ICommand _startCommand;
     private ICommand _stopCommand;
+    private ICommand _sendEmailCommand;
     public ICommand SaveCommand => new RelayCommand(Save);
     public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
     public ICommand ArchiveLatestFolderCommand => new RelayCommand(ArchiveLatestFolder);
 
     private FileSystemWatcher _folderWatcher;
 
-    public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
+    public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
+        { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
     //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
     public AvaloniaList<string> Times { get; } =
@@ -117,6 +119,19 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         }
     }
 
+    private string _userEmail;
+
+    public string UserEmail
+    {
+        get { return _userEmail; }
+        set
+        {
+            _userEmail = value;
+            OnPropertyChanged();
+            ((RelayCommand)_sendEmailCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
     public bool IsFolderExists
     {
         get
@@ -150,6 +165,18 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 _stopCommand = value;
                 OnPropertyChanged();
             }
+        }
+    }
+
+    public ICommand SendEmailCommand
+    {
+        get
+        {
+            return _sendEmailCommand ?? (_sendEmailCommand = new RelayCommand(
+                async () => await SendEmailAsync(),
+                () => EmailSender.IsValidEmail(UserEmail) && Directory.GetFiles(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "LogAnalyzerForWindows"), "*.zip").Length > 0));
         }
     }
 
@@ -317,7 +344,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     {
         try
         {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "LogAnalyzerForWindows");
             if (Directory.Exists(defaultPath))
             {
                 Process.Start(new ProcessStartInfo
@@ -333,17 +361,18 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             Debug.WriteLine($"An error occurred: {ex.Message}");
         }
     }
-    
+
     public void ArchiveLatestFolder()
     {
         try
         {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "LogAnalyzerForWindows");
 
             if (Directory.Exists(defaultPath))
             {
                 var directories = new DirectoryInfo(defaultPath).GetDirectories();
-                
+
                 var latestDirectory = directories.OrderByDescending(d => d.CreationTime).FirstOrDefault();
 
                 if (latestDirectory != null)
@@ -352,6 +381,28 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                     ZipFile.CreateFromDirectory(latestDirectory.FullName, zipPath);
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"An error occurred: {ex.Message}");
+        }
+    }
+
+    private async Task SendEmailAsync()
+    {
+        try
+        {
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "LogAnalyzerForWindows");
+
+            var zipFiles = Directory.GetFiles(defaultPath, "*.zip");
+            var latestZipFile = zipFiles.OrderByDescending(f => File.GetCreationTime(f)).First();
+
+            var emailSender = new EmailSender("smtp-mail.outlook.com", 587, "LogAnalyzer@outlook.com", "User User",
+                "MyP@ssw0rd1ForProject");
+
+            await emailSender.SendEmailAsync("Recipient Name", UserEmail, "Log Analyzer For Windows", "Latest Zip File",
+                latestZipFile);
         }
         catch (Exception ex)
         {

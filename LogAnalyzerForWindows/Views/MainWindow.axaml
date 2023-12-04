@@ -11,13 +11,13 @@
         Title="Log Analyzer For Windows">
 
     <Design.DataContext>
-        <vm:MainWindowViewModel/>
+        <vm:MainWindowViewModel />
     </Design.DataContext>
 
     <Window.Styles>
         <StyleInclude Source="/Styles/Styles.axaml" />
     </Window.Styles>
-    
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" /> <!-- New row for ProgressBar -->
@@ -31,64 +31,84 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <ProgressBar x:Name="LoadingSpinner" Grid.Row="0" Grid.ColumnSpan="2" IsIndeterminate="True" IsVisible="{Binding IsLoading}" />
+        <ProgressBar x:Name="LoadingSpinner" Grid.Row="0" Grid.ColumnSpan="2" IsIndeterminate="True"
+                     IsVisible="{Binding IsLoading}" />
 
         <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal">
             <StackPanel Orientation="Vertical" Margin="20,0,10,0">
                 <Label Content="Log:" />
-                <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SelectedLogLevel}" />
+                <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}"
+                          SelectedItem="{Binding SelectedLogLevel}" />
             </StackPanel>
 
             <StackPanel Orientation="Vertical">
                 <Label Content="Time:" />
-                <ComboBox x:Name="TimeList" SelectedIndex="0" ItemsSource="{Binding Times}" SelectedItem="{Binding SelectedTime}" />
+                <ComboBox x:Name="TimeList" SelectedIndex="0" ItemsSource="{Binding Times}"
+                          SelectedItem="{Binding SelectedTime}" />
             </StackPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="20,60,10,0">
             <StackPanel Orientation="Vertical">
                 <Label Content="Format:" />
-                <ComboBox x:Name="FormatComboBox" SelectedIndex="0"  ItemsSource="{Binding Formats}" SelectedItem="{Binding SelectedFormat}" />
+                <ComboBox x:Name="FormatComboBox" SelectedIndex="0" ItemsSource="{Binding Formats}"
+                          SelectedItem="{Binding SelectedFormat}" />
             </StackPanel>
-            
+
             <StackPanel Orientation="Vertical">
                 <Button Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Margin="10,20,0,0">
-                    <Image Source="{SvgImage /Assets/save.svg}" Width="25" Height="25"/>
+                    <Image Source="{SvgImage /Assets/save.svg}" Width="25" Height="25" />
                     <ToolTip.Tip>
-                        <TextBlock Text="Saves the current logs to a file."/>
+                        <TextBlock Text="Saves the current logs to a file." />
                     </ToolTip.Tip>
                 </Button>
             </StackPanel>
-            
+
             <StackPanel Orientation="Vertical">
-            <Button Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="10,20,0,0" >
-                <Image Source="{SvgImage /Assets/folder-plus.svg}" Width="25" Height="25"/>
-                <ToolTip.Tip>
-                    <TextBlock Text="Opens the LogAnalyzerForWindows directory."/>
-                </ToolTip.Tip>
-            </Button>
+                <Button Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="10,20,0,0">
+                    <Image Source="{SvgImage /Assets/folder-plus.svg}" Width="25" Height="25" />
+                    <ToolTip.Tip>
+                        <TextBlock Text="Opens the LogAnalyzerForWindows directory." />
+                    </ToolTip.Tip>
+                </Button>
             </StackPanel>
-            
+
             <StackPanel Orientation="Vertical">
                 <Button Command="{Binding ArchiveLatestFolderCommand}" Margin="10,20,0,0">
-                    <Image Source="{SvgImage /Assets/archive.svg}" Width="25" Height="25"/>
+                    <Image Source="{SvgImage /Assets/archive.svg}" Width="25" Height="25" />
                     <ToolTip.Tip>
-                        <TextBlock Text="Archives the latest folder to a zip file in the LogAnalyzerForWindows directory."/>
+                        <TextBlock
+                            Text="Archives the latest folder to a zip file in the LogAnalyzerForWindows directory." />
                     </ToolTip.Tip>
                 </Button>
             </StackPanel>
         </StackPanel>
-        
 
-        
-        
-        <TextBox x:Name="Output" Grid.Row="2" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}" 
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" 
+
+        <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="20,120,10,0">
+            <StackPanel Orientation="Vertical">
+                <Label Content="Email:" />
+                <TextBox x:Name="EmailInput" Text="{Binding UserEmail}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Vertical">
+                <Button Command="{Binding SendEmailCommand}" Margin="10,20,0,0">
+                    <Image Source="{SvgImage /Assets/mail.svg}" Width="25" Height="25" />
+                    <ToolTip.Tip>
+                        <TextBlock Text="Sends the latest zip file to the specified email." />
+                    </ToolTip.Tip>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+
+        <TextBox x:Name="Output" Grid.Row="2" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                  IsReadOnly="True" HorizontalAlignment="Center" />
 
         <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Command="{Binding StartCommand}" Margin="10">
-                <Image Source="{SvgImage /Assets/play.svg}" Width="25" Height="25"/>
+                <Image Source="{SvgImage /Assets/play.svg}" Width="25" Height="25" />
             </Button>
             <Button Command="{Binding StopCommand}" Margin="10">
                 <Image Source="{SvgImage /Assets/pause.svg}" Width="25" Height="25" />
