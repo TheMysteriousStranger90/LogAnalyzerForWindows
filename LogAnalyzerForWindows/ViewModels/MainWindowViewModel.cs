@@ -271,17 +271,30 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         TimeFilter filter = new TimeFilter(timeSpan);
 
-        _onLogsChanged = (logs) =>
+        HashSet<LogEntry> uniqueLogs = new HashSet<LogEntry>();
+
+        if (_onLogsChanged == null)
         {
-            var filteredLogs = filter.Filter(logs);
-            LevelLogAnalyzer analyzer = new LevelLogAnalyzer(
-                SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
-                    ? LogLevelTranslations[SelectedLogLevel]
-                    : SelectedLogLevel);
-            var levelLogs = analyzer.FilterByLevel(filteredLogs);
-            LogManager manager = new LogManager(reader, analyzer, formatter, writer);
-            manager.ProcessLogs(levelLogs);
-        };
+            _onLogsChanged = (logs) =>
+            {
+                var filteredLogs = filter.Filter(logs);
+                LevelLogAnalyzer analyzer = new LevelLogAnalyzer(
+                    SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
+                        ? LogLevelTranslations[SelectedLogLevel]
+                        : SelectedLogLevel);
+                var levelLogs = analyzer.FilterByLevel(filteredLogs);
+                LogManager manager = new LogManager(reader, analyzer, formatter, writer);
+                manager.ProcessLogs(levelLogs);
+
+                foreach (var log in levelLogs)
+                {
+                    uniqueLogs.Add(log);
+                }
+
+                analyzer.Analyze(uniqueLogs);
+                TextBlock = $"Number of unique logs: {uniqueLogs.Count}";
+            };
+        }
 
         _monitor.LogsChanged += _onLogsChanged;
 

@@ -12,7 +12,7 @@ public class LogMonitor
     public event Action MonitoringStarted;
     public event Action MonitoringStopped;
 
-    private bool _shouldStop = false;
+    private CancellationTokenSource _cts;
     private bool _isMonitoring;
 
     public bool IsMonitoring
@@ -22,11 +22,12 @@ public class LogMonitor
 
     public void Monitor(ILogReader reader)
     {
+        _cts = new CancellationTokenSource();
         IEnumerable<LogEntry> previousLogs = null;
         _isMonitoring = true;
         MonitoringStarted?.Invoke();
 
-        while (!_shouldStop)
+        while (!_cts.Token.IsCancellationRequested)
         {
             IEnumerable<LogEntry> currentLogs = reader.ReadLogs();
 
@@ -38,12 +39,19 @@ public class LogMonitor
 
             Thread.Sleep(1000);
         }
+
+        if (!_cts.Token.IsCancellationRequested)
+        {
+            _isMonitoring = false;
+            MonitoringStopped?.Invoke();
+        }
     }
 
     public void StopMonitoring()
     {
-        _shouldStop = true;
-        _isMonitoring = false;
-        MonitoringStopped?.Invoke();
+        if (_cts != null)
+        {
+            _cts.Cancel();
+        }
     }
 }
