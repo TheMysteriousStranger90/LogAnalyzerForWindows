@@ -34,3 +34,7 @@ Bohdan Harabadzhyu
 [MIT](https://choosealicense.com/licenses/mit/)
 
 Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+
+## SourceForge
+
+[![Download LogAnalyzerForWindows](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/loganalyzerforwindows/files/latest/download)
