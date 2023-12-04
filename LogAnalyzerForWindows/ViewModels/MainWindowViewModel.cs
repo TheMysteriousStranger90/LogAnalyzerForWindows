@@ -36,12 +36,20 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public ICommand SaveCommand => new RelayCommand(Save);
     public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
     public ICommand ArchiveLatestFolderCommand => new RelayCommand(ArchiveLatestFolder);
-
     private FileSystemWatcher _folderWatcher;
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
-        { "Трассировка", "Отладка", "Информация", "Предупреждение", "Ошибка", "Критический" };
-    //public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string> { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
+        { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
+
+    public static readonly Dictionary<string, string> LogLevelTranslations = new Dictionary<string, string>
+    {
+        { "Trace", "Трассировка" },
+        { "Debug", "Отладка" },
+        { "Information", "Информация" },
+        { "Warning", "Предупреждение" },
+        { "Error", "Ошибка" },
+        { "Critical", "Критический" }
+    };
 
     public AvaloniaList<string> Times { get; } =
         new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
@@ -250,7 +258,10 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
             void OnLogsChanged(IEnumerable<LogEntry> logs)
             {
                 var filteredLogs = filter.Filter(logs);
-                LevelLogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
+                LevelLogAnalyzer analyzer = new LevelLogAnalyzer(
+                    SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
+                        ? LogLevelTranslations[SelectedLogLevel]
+                        : SelectedLogLevel);
                 var levelLogs = analyzer.FilterByLevel(filteredLogs);
                 LogManager manager = new LogManager(reader, analyzer, formatter, writer);
                 manager.ProcessLogs(levelLogs);
@@ -378,7 +389,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 if (latestDirectory != null)
                 {
                     string zipPath = Path.Combine(defaultPath, $"{latestDirectory.Name}.zip");
-                    
+
                     if (File.Exists(zipPath))
                     {
                         File.Delete(zipPath);
