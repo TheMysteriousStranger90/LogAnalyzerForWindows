@@ -15,7 +15,7 @@ This project is a log analyzer for Windows, which reads system logs, filters the
 
 ## Requirements
 
-- - The primary language of the operating system must be either English or Russian for the application to work correctly.
+- The primary language of the operating system must be either English or Russian for the application to work correctly.
 
 ## Usage
 
