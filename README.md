@@ -15,11 +15,11 @@ This project is a log analyzer for Windows, which reads system logs, filters the
 
 ## Requirements
 
-- The primary language of the operating system must be Russian for the application to work correctly.
+- - The primary language of the operating system must be either English or Russian for the application to work correctly.
 
 ## Usage
 
-1. To install the LogAnalyzerForWindows application, download the LogAnalyzerForWindows.rar. Extract the .rar file, and run the LogAnalyzerForWindows.exe file on your machine.
+1. To install the LogAnalyzerForWindows application, download the LogAnalyzerForWindows.rar (if primary language of the operating system is Russian) OR LogAnalyzerForWindowsEN.rar (if primary language of the operating system is English). Extract the .rar file, and run the LogAnalyzerForWindows.exe file on your machine.
 
 ## Contributing
 
