@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using LogAnalyzerForWindows.Formatter.Interfaces;
+using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Analyzer;
-using LogAnalyzerForWindows.Models.Formatter.Interfaces;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
 
 namespace LogAnalyzerForWindows.Models;
 
-public class LogManager
+public class LogManager : ILogManager
 {
     private ILogReader _reader;
     private LogAnalyzer _analyzer;

@@ -1,6 +1,8 @@
-﻿namespace LogAnalyzerForWindows.Filter.Interfaces;
+﻿using System;
+
+namespace LogAnalyzerForWindows.Filter.Interfaces;
 
 public interface ITimeProvider
 {
-    
+    DateTime GetCurrentTime();
 }

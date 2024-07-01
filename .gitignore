@@ -3,3 +3,7 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+LogAnalyzerForWindows/appsettings.json
+LogAnalyzerForWindows/bin
+LogAnalyzerForWindows/obj

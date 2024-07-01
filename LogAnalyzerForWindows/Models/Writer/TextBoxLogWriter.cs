@@ -1,5 +1,5 @@
 ﻿using System;
-using LogAnalyzerForWindows.Models.Formatter.Interfaces;
+using LogAnalyzerForWindows.Formatter.Interfaces;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
 
 namespace LogAnalyzerForWindows.Models.Writer;

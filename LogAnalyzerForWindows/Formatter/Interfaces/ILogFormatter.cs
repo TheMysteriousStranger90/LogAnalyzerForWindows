@@ -1,4 +1,6 @@
-﻿namespace LogAnalyzerForWindows.Models.Formatter.Interfaces;
+﻿using LogAnalyzerForWindows.Models;
+
+namespace LogAnalyzerForWindows.Formatter.Interfaces;
 
 public interface ILogFormatter
 {

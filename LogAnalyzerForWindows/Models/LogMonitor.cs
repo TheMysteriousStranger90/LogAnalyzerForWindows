@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 
 namespace LogAnalyzerForWindows.Models;
 
-public class LogMonitor
+public class LogMonitor : ILogMonitor
 {
     public event Action<IEnumerable<LogEntry>> LogsChanged;
     public event Action MonitoringStarted;

@@ -1,6 +1,9 @@
-﻿namespace LogAnalyzerForWindows.Filter;
+﻿using System;
+using LogAnalyzerForWindows.Filter.Interfaces;
 
-public class SystemTimeProvider
+namespace LogAnalyzerForWindows.Filter;
+
+public class SystemTimeProvider : ITimeProvider
 {
-    
+    public DateTime GetCurrentTime() => DateTime.UtcNow;
 }

@@ -7,7 +7,7 @@ using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
 
-namespace LogAnalyzerForWindows.Models;
+namespace LogAnalyzerForWindows.Mail;
 
 public class EmailSender
 {
