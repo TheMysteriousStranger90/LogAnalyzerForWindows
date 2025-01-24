@@ -9,10 +9,10 @@ namespace LogAnalyzerForWindows.Models;
 
 public class LogMonitor : ILogMonitor
 {
+    private HashSet<LogEntry> _lastProcessedLogs = new HashSet<LogEntry>();
     public event Action<IEnumerable<LogEntry>> LogsChanged;
     public event Action MonitoringStarted;
     public event Action MonitoringStopped;
-
     private CancellationTokenSource _cts;
     private bool _isMonitoring;
 
@@ -21,30 +21,25 @@ public class LogMonitor : ILogMonitor
         get { return _isMonitoring; }
     }
 
+
     public void Monitor(ILogReader reader)
     {
         _cts = new CancellationTokenSource();
-        IEnumerable<LogEntry> previousLogs = null;
         _isMonitoring = true;
         MonitoringStarted?.Invoke();
 
         while (!_cts.Token.IsCancellationRequested)
         {
-            IEnumerable<LogEntry> currentLogs = reader.ReadLogs();
+            var currentLogs = reader.ReadLogs().ToList();
+            var newLogs = currentLogs.Except(_lastProcessedLogs).ToList();
 
-            if (previousLogs == null || !currentLogs.SequenceEqual(previousLogs))
+            if (newLogs.Any())
             {
-                LogsChanged?.Invoke(currentLogs);
-                previousLogs = currentLogs;
+                LogsChanged?.Invoke(newLogs);
+                _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
             }
 
             Thread.Sleep(1000);
-        }
-
-        if (!_cts.Token.IsCancellationRequested)
-        {
-            _isMonitoring = false;
-            MonitoringStopped?.Invoke();
         }
     }
 

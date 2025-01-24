@@ -46,6 +46,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public ICommand ArchiveLatestFolderCommand => new RelayCommand(ArchiveLatestFolder);
     private Action<IEnumerable<LogEntry>> _onLogsChanged;
     private FileSystemWatcher _folderWatcher;
+    private HashSet<LogEntry> _processedLogs = new HashSet<LogEntry>();
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
@@ -289,24 +290,28 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 _onLogsChanged = (logs) =>
                 {
                     var filteredLogs = filter.Filter(logs);
-                    LevelLogAnalyzer analyzer = new LevelLogAnalyzer(
+                    var analyzer = new LevelLogAnalyzer(
                         SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
                             ? LogLevelTranslations[SelectedLogLevel]
                             : SelectedLogLevel);
-                    var levelLogs = analyzer.FilterByLevel(filteredLogs);
-                    LogManager manager = new LogManager(reader, analyzer, formatter, writer);
+                        
+                    var levelLogs = analyzer.FilterByLevel(filteredLogs)
+                        .Where(log => !_processedLogs.Contains(log))
+                        .ToList();
+
                     foreach (var log in levelLogs)
                     {
                         string pattern = @"^(\d{2}\.\d{2}\.\d{4} \d{1,2}:\d{2}:\d{2})(?:\s+\1)+";
-
                         log.Message = Regex.Replace(log.Message, pattern, "$1");
-                        uniqueLogs.Add(log);
+                        _processedLogs.Add(log);
                     }
 
-                    manager.ProcessLogs(uniqueLogs);
-
-                    analyzer.Analyze(uniqueLogs);
-                    TextBlock = $"Number of unique logs: {uniqueLogs.Count}";
+                    if (levelLogs.Any())
+                    {
+                        manager.ProcessLogs(levelLogs);
+                        analyzer.Analyze(_processedLogs);
+                        TextBlock = $"Number of unique logs: {_processedLogs.Count}";
+                    }
                 };
             }
 
@@ -336,7 +341,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         SelectedLogLevel = null;
         SelectedTime = null;
         IsLoading = false;
-
+        _processedLogs.Clear();
         ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
         ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }

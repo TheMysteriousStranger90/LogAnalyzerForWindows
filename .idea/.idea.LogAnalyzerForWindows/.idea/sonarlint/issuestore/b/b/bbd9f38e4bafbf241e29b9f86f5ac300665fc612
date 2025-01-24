@@ -1,0 +1,7 @@
+
+Jcsharpsquid:S2933)"!Make '_folderWatcher' 'readonly'.(óÓÚúşÿÿÿÿ8ø€¤Ã1
+Ecsharpsquid:S2933Ò"Make '_monitor' 'readonly'.(ûÊı‚øÿÿÿÿ8¤›½¤Ã1
+•csharpsquid:S3887."qUse an immutable collection or reduce the accessibility of the non-private readonly field 'LogLevelTranslations'.(ÇÏ«İ8Òğ¤Ã1
+csharpsquid:S2386."jUse an immutable collection or reduce the accessibility of the public static field 'LogLevelTranslations'.(ÇÏ«İ8Òğ¤Ã1
+†csharpsquid:S1450)"]Remove the field '_folderWatcher' and declare it as a local variable in the relevant methods.(óÓÚúşÿÿÿÿ8ø€¤Ã1
+Ucsharpsquid:S1481ş"+Remove the unused local variable 'manager'.(àˆï•øÿÿÿÿ8ÍÍ…¥Ã1

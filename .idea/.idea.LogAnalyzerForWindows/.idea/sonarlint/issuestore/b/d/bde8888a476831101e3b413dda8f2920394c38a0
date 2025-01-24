@@ -1,0 +1,6 @@
+
+7csharpsquid:S2933"Make '_reader' 'readonly'.(úå¯
+>csharpsquid:S2933"Make '_analyzer' 'readonly'.(°²“Óıÿÿÿÿ
+:csharpsquid:S2933"Make '_formatter' 'readonly'.(ªÎñ 
+7csharpsquid:S2933"Make '_writer' 'readonly'.(„§é
+ncsharpsquid:S4487"QRemove this unread private field '_reader' or refactor the code to use its value.(úå¯

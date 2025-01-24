@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AvaloniaProject">
+    <option name="projectPerEditor">
+      <map>
+        <entry key="LogAnalyzerForWindows/App.axaml" value="LogAnalyzerForWindows/LogAnalyzerForWindows.csproj" />
+        <entry key="LogAnalyzerForWindows/Styles/Styles.axaml" value="LogAnalyzerForWindows/LogAnalyzerForWindows.csproj" />
+        <entry key="LogAnalyzerForWindows/Views/MainWindow.axaml" value="LogAnalyzerForWindows/LogAnalyzerForWindows.csproj" />
+      </map>
+    </option>
+  </component>
+</project>

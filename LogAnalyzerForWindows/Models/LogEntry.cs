@@ -14,7 +14,9 @@ public class LogEntry
             return false;
 
         LogEntry other = (LogEntry)obj;
-        return Timestamp == other.Timestamp && Level == other.Level && Message == other.Message;
+        return Timestamp?.ToString() == other.Timestamp?.ToString() &&
+               Level == other.Level &&
+               Message == other.Message;
     }
 
     public override int GetHashCode()
@@ -22,9 +24,9 @@ public class LogEntry
         unchecked
         {
             int hash = 17;
-            hash = hash * 23 + Timestamp.GetHashCode();
-            hash = hash * 23 + (Level != null ? Level.GetHashCode() : 0);
-            hash = hash * 23 + (Message != null ? Message.GetHashCode() : 0);
+            hash = hash * 23 + (Timestamp?.ToString().GetHashCode() ?? 0);
+            hash = hash * 23 + (Level?.GetHashCode() ?? 0);
+            hash = hash * 23 + (Message?.GetHashCode() ?? 0);
             return hash;
         }
     }

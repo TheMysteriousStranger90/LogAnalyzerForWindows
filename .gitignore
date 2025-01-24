@@ -7,3 +7,5 @@ riderModule.iml
 LogAnalyzerForWindows/appsettings.json
 LogAnalyzerForWindows/bin
 LogAnalyzerForWindows/obj
+
+.idea/
