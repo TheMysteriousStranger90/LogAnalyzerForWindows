@@ -69,9 +69,8 @@
                     </Button>
                 </StackPanel>
             </ScrollViewer>
-
-            <!-- Текстовое поле вывода (справа) -->
-            <TextBox x:Name="Output" Grid.Column="1" Margin="5,10,10,10"
+            
+            <TextBox x:Name="Output" Grid.Column="1" Margin="5,30,10,10"
                      Text="{Binding OutputText}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto" 
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -79,13 +78,12 @@
                      FontFamily="Consolas, Courier New, Monospace"/>
         </Grid>
         
-        <!-- Строка состояния -->
         <Border Grid.Row="2" Background="#333333" Padding="10" Margin="10,5,10,5" CornerRadius="3">
-             <TextBlock Foreground="White" FontSize="12" TextAlignment="Left"
+             <TextBlock Foreground="White" FontSize="12" TextAlignment="Center" 
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Text="{Binding TextBlock}" TextWrapping="Wrap"/>
         </Border>
         
-        <!-- Кнопки действий (Start/Stop) -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" 
                     HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="20" Margin="10">
             <Button Command="{Binding StartCommand}" MinWidth="100" Height="40">
