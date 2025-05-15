@@ -1,4 +1,5 @@
-﻿using LogAnalyzerForWindows.Formatter.Interfaces;
+﻿using System;
+using LogAnalyzerForWindows.Formatter.Interfaces;
 using LogAnalyzerForWindows.Models;
 
 namespace LogAnalyzerForWindows.Formatter;
@@ -7,7 +8,8 @@ public class LogFormatter : ILogFormatter
 {
     public LogEntry Format(LogEntry log)
     {
-        log.Message = $"{log.Message}";
+        if (log == null) throw new ArgumentNullException(nameof(log));
+
         return log;
     }
 }

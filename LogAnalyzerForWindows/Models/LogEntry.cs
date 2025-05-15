@@ -10,11 +10,14 @@ public class LogEntry
 
     public override bool Equals(object obj)
     {
-        if (obj == null || GetType() != obj.GetType())
-            return false;
-
+        if (obj is null) return false;
+        if (ReferenceEquals(this, obj)) return true;
+        if (obj.GetType() != this.GetType()) return false;
+        
         LogEntry other = (LogEntry)obj;
-        return Timestamp == other.Timestamp && Level == other.Level && Message == other.Message;
+        return Nullable.Equals(Timestamp, other.Timestamp) &&
+               Level == other.Level &&
+               Message == other.Message;
     }
 
     public override int GetHashCode()
@@ -22,15 +25,17 @@ public class LogEntry
         unchecked
         {
             int hash = 17;
-            hash = hash * 23 + Timestamp.GetHashCode();
-            hash = hash * 23 + (Level != null ? Level.GetHashCode() : 0);
-            hash = hash * 23 + (Message != null ? Message.GetHashCode() : 0);
+            hash = hash * 23 + (Timestamp?.GetHashCode() ?? 0);
+            hash = hash * 23 + (Level?.GetHashCode() ?? 0);
+            hash = hash * 23 + (Message?.GetHashCode() ?? 0);
             return hash;
         }
     }
 
     public override string ToString()
     {
-        return $"{Timestamp} {Level} {Message}";
+        string timestampStr = Timestamp?.ToString("dd.MM.yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) ?? "N/A";
+        string levelStr = Level ?? "N/A";
+        return $"{timestampStr} {levelStr} {Message}";
     }
 }

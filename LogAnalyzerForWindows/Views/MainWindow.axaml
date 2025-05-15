@@ -3,7 +3,7 @@
         xmlns:vm="using:LogAnalyzerForWindows.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600" 
         x:Class="LogAnalyzerForWindows.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/icon.ico"
@@ -17,106 +17,83 @@
     <Window.Styles>
         <StyleInclude Source="/Styles/Styles.axaml" />
     </Window.Styles>
+    
+    <Grid RowDefinitions="Auto, *, Auto, Auto">
+        
+        <ProgressBar Grid.Row="0" 
+                     IsIndeterminate="True" IsVisible="{Binding IsLoading}" 
+                     Height="5" VerticalAlignment="Top"/>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" /> <!-- New row for ProgressBar -->
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        <Grid Grid.Row="1" ColumnDefinitions="Auto, *">
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="5,0,5,0">
+                <StackPanel Margin="10" Spacing="10" MinWidth="250">
+                    <TextBlock Text="Filters" FontWeight="Bold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Label Content="Level:" VerticalAlignment="Center" MinWidth="50"/>
+                        <ComboBox x:Name="LogLevelList" MinWidth="150"
+                                  ItemsSource="{Binding LogLevels}"
+                                  SelectedItem="{Binding SelectedLogLevel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Label Content="Time:" VerticalAlignment="Center" MinWidth="50"/>
+                        <ComboBox x:Name="TimeList" MinWidth="150"
+                                  ItemsSource="{Binding Times}"
+                                  SelectedItem="{Binding SelectedTime}"/>
+                    </StackPanel>
 
-        <ProgressBar x:Name="LoadingSpinner" Grid.Row="0" Grid.ColumnSpan="2" IsIndeterminate="True"
-                     IsVisible="{Binding IsLoading}" />
+                    <TextBlock Text="Output" FontWeight="Bold" Margin="0,15,0,0"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Label Content="Format:" VerticalAlignment="Center" MinWidth="50"/>
+                        <ComboBox x:Name="FormatComboBox" MinWidth="150"
+                                  ItemsSource="{Binding Formats}"
+                                  SelectedItem="{Binding SelectedFormat}"/>
+                    </StackPanel>
+                    
+                    <Button Content="Save Logs" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Margin="0,10,0,0">
+                        <ToolTip.Tip>Saves the current logs to a file.</ToolTip.Tip>
+                    </Button>
+                    <Button Content="Open Logs Folder" Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="0,5,0,0">
+                        <ToolTip.Tip>Opens the LogAnalyzerForWindows directory.</ToolTip.Tip>
+                    </Button>
+                    <Button Content="Archive Latest Logs" Command="{Binding ArchiveLatestFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="0,5,0,0">
+                        <ToolTip.Tip>Archives the latest daily log folder.</ToolTip.Tip>
+                    </Button>
 
-        <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal">
-            <StackPanel Orientation="Vertical" Margin="20,0,10,0">
-                <Label Content="Log:" />
-                <ComboBox x:Name="LogLevelList" SelectedIndex="0" ItemsSource="{Binding LogLevels}"
-                          SelectedItem="{Binding SelectedLogLevel}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Vertical">
-                <Label Content="Time:" />
-                <ComboBox x:Name="TimeList" SelectedIndex="0" ItemsSource="{Binding Times}"
-                          SelectedItem="{Binding SelectedTime}" />
-            </StackPanel>
-        </StackPanel>
-
-        <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="20,60,10,0">
-            <StackPanel Orientation="Vertical">
-                <Label Content="Format:" />
-                <ComboBox x:Name="FormatComboBox" SelectedIndex="0" ItemsSource="{Binding Formats}"
-                          SelectedItem="{Binding SelectedFormat}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Vertical">
-                <Button Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Margin="10,20,0,0">
-                    <Image Source="{SvgImage /Assets/save.svg}" Width="25" Height="25" />
-                    <ToolTip.Tip>
-                        <TextBlock Text="Saves the current logs to a file." />
-                    </ToolTip.Tip>
-                </Button>
-            </StackPanel>
-
-            <StackPanel Orientation="Vertical">
-                <Button Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="10,20,0,0">
-                    <Image Source="{SvgImage /Assets/folder-plus.svg}" Width="25" Height="25" />
-                    <ToolTip.Tip>
-                        <TextBlock Text="Opens the LogAnalyzerForWindows directory." />
-                    </ToolTip.Tip>
-                </Button>
-            </StackPanel>
-
-            <StackPanel Orientation="Vertical">
-                <Button Command="{Binding ArchiveLatestFolderCommand}" Margin="10,20,0,0">
-                    <Image Source="{SvgImage /Assets/archive.svg}" Width="25" Height="25" />
-                    <ToolTip.Tip>
-                        <TextBlock
-                            Text="Archives the latest folder to a zip file in the LogAnalyzerForWindows directory." />
-                    </ToolTip.Tip>
-                </Button>
-            </StackPanel>
-        </StackPanel>
-
-
-        <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="20,120,10,0">
-            <StackPanel Orientation="Vertical">
-                <Label Content="Email:" />
-                <TextBox x:Name="EmailInput" Text="{Binding UserEmail}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Vertical">
-                <Button Command="{Binding SendEmailCommand}" Margin="10,20,0,0">
-                    <Image Source="{SvgImage /Assets/mail.svg}" Width="25" Height="25" />
-                    <ToolTip.Tip>
-                        <TextBlock Text="Sends the latest zip file to the specified email." />
-                    </ToolTip.Tip>
-                </Button>
-            </StackPanel>
-        </StackPanel>
-
-
-        <TextBox x:Name="Output" Grid.Row="2" Grid.Column="1" Width="600" Height="300" Text="{Binding OutputText}"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 IsReadOnly="True" HorizontalAlignment="Center" />
-
-        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
-            <Button Command="{Binding StartCommand}" Margin="10">
-                <Image Source="{SvgImage /Assets/play.svg}" Width="25" Height="25" />
+                    <TextBlock Text="Email" FontWeight="Bold" Margin="0,15,0,0"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Label Content="Email:" VerticalAlignment="Center" MinWidth="50"/>
+                        <TextBox x:Name="EmailInput" Text="{Binding UserEmail}" MinWidth="150"/>
+                    </StackPanel>
+                    <Button Content="Send Latest Archive" Command="{Binding SendEmailCommand}" Margin="0,10,0,0">
+                        <ToolTip.Tip>Sends the latest zip file to the specified email.</ToolTip.Tip>
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+            
+            <TextBox x:Name="Output" Grid.Column="1" Margin="5,30,10,10"
+                     Text="{Binding OutputText}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" 
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" 
+                     FontFamily="Consolas, Courier New, Monospace"/>
+        </Grid>
+        
+        <Border Grid.Row="2" Background="#333333" Padding="10" Margin="10,5,10,5" CornerRadius="3">
+             <TextBlock Foreground="White" FontSize="12" TextAlignment="Center" 
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Text="{Binding TextBlock}" TextWrapping="Wrap"/>
+        </Border>
+        
+        <StackPanel Grid.Row="3" Orientation="Horizontal" 
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="20" Margin="10">
+            <Button Command="{Binding StartCommand}" MinWidth="100" Height="40">
+                <TextBlock Text="Start"/>
+                 <ToolTip.Tip>Starts monitoring logs.</ToolTip.Tip>
             </Button>
-            <Button Command="{Binding StopCommand}" Margin="10">
-                <Image Source="{SvgImage /Assets/pause.svg}" Width="25" Height="25" />
+            <Button Command="{Binding StopCommand}" MinWidth="100" Height="40">
+                <TextBlock Text="Stop"/>
+                <ToolTip.Tip>Stops monitoring logs.</ToolTip.Tip>
             </Button>
         </StackPanel>
-        
-        
-        <TextBlock Grid.Row="4" Grid.Column="0" Foreground="#FFFFFFFF" FontSize="14" TextAlignment="Center"
-                   Padding="10" Text="{Binding TextBlock}" />
     </Grid>
 </Window>

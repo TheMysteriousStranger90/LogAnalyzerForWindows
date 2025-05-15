@@ -1,50 +1,130 @@
 ﻿<Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Design.PreviewWith>
-        <Border Padding="20">
-            <!-- Add Controls for Previewer Here -->
-        </Border>
-    </Design.PreviewWith>
+    
+    <!-- Base Colors -->
+    <Style>
+        <Style.Resources>
+            <Color x:Key="PrimaryColor">#31A8FF</Color>
+            <Color x:Key="DarkBackground">#2E2E2E</Color>
+            <Color x:Key="LightText">#FFFFFF</Color>
+            <Color x:Key="HoverColor">#1E90FF</Color>
+            <Color x:Key="PressedColor">#0066CC</Color>
+        </Style.Resources>
+    </Style>
 
+    <!-- Button Styles -->
     <Style Selector="Button">
-        <Setter Property="Foreground" Value="#FFFFFFFF" />
+        <Setter Property="Foreground" Value="{StaticResource LightText}" />
+        <Setter Property="Background" Value="{StaticResource PrimaryColor}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DarkBackground}" />
         <Setter Property="BorderThickness" Value="2" />
-        <Setter Property="Background" Value="#31A8FF" />
-        <Setter Property="BorderBrush" Value="#2E2E2E" />
         <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0.2"/>
+                <BrushTransition Property="Background" Duration="0.2"/>
+            </Transitions>
+        </Setter>
     </Style>
-    
-    <Style Selector="ComboBox">
-        <Setter Property="Foreground" Value="#FFFFFFFF" />
-        <Setter Property="BorderThickness" Value="2" />
-        <Setter Property="Background" Value="#31A8FF" />
-        <Setter Property="BorderBrush" Value="#2E2E2E" />
-        <Setter Property="CornerRadius" Value="6"/>
-    </Style>
-    
-    <Style Selector="ComboBoxItem">
-        <Setter Property="Foreground" Value="#31A8FF" />
-        <Setter Property="Background" Value="#2E2E2E" />
-    </Style>
-    
-    <Style Selector="TextBox">
-        <Setter Property="Foreground" Value="#FFFFFFFF" />
-        <Setter Property="BorderThickness" Value="2" />
 
-        <Setter Property="BorderBrush" Value="#31A8FF" />
+    <Style Selector="Button:pointerover">
+        <Setter Property="Background" Value="{StaticResource HoverColor}"/>
+        <Setter Property="RenderTransform" Value="scale(1.05)"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style Selector="Button:pressed">
+        <Setter Property="Background" Value="{StaticResource PressedColor}"/>
+        <Setter Property="RenderTransform" Value="scale(0.95)"/>
+    </Style>
+
+    <!-- ComboBox Styles -->
+    <Style Selector="ComboBox">
+        <Setter Property="Foreground" Value="{StaticResource LightText}" />
+        <Setter Property="Background" Value="{StaticResource PrimaryColor}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DarkBackground}" />
+        <Setter Property="BorderThickness" Value="2" />
         <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="MinWidth" Value="150"/>
+        <Setter Property="Height" Value="35"/>
     </Style>
-    
+
+    <Style Selector="ComboBox:pointerover">
+        <Setter Property="Background" Value="{StaticResource HoverColor}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style Selector="ComboBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource LightText}" />
+        <Setter Property="Background" Value="{StaticResource DarkBackground}" />
+        <Setter Property="Padding" Value="8,4"/>
+    </Style>
+
+    <Style Selector="ComboBoxItem:pointerover">
+        <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
+    </Style>
+
+    <!-- TextBox Styles -->
+    <Style Selector="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource LightText}" />
+        <Setter Property="Background" Value="{StaticResource DarkBackground}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PrimaryColor}" />
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource PrimaryColor}"/>
+        <Setter Property="SelectionForegroundBrush" Value="{StaticResource LightText}"/>
+    </Style>
+
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderThickness" Value="3"/>
+        <Setter Property="BorderBrush" Value="{StaticResource HoverColor}"/>
+    </Style>
+
+    <!-- Window Style -->
     <Style Selector="Window">
-        <Setter Property="Background" Value="#2E2E2E" />
+        <Setter Property="Background" Value="{StaticResource DarkBackground}" />
+        <Setter Property="TransparencyLevelHint" Value="AcrylicBlur"/>
+        <Setter Property="ExtendClientAreaToDecorationsHint" Value="True"/>
     </Style>
-    
+
+    <!-- ProgressBar Styles -->
     <Style Selector="ProgressBar">
-        <Setter Property="Height" Value="20"/>
-        <Setter Property="Foreground" Value="#31A8FF"/>
-        <Setter Property="Background" Value="#FFFFFFFF"/>
-        <Setter Property="BorderBrush" Value="#31A8FF"/>
-        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Height" Value="4"/>
+        <Setter Property="Foreground" Value="{StaticResource PrimaryColor}"/>
+        <Setter Property="Background" Value="#44FFFFFF"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Value" Duration="0.3"/>
+            </Transitions>
+        </Setter>
     </Style>
-    
+
+    <Style Selector="ProgressBar:indeterminate">
+        <Style.Animations>
+            <Animation Duration="0:0:1" IterationCount="Infinite">
+                <KeyFrame Cue="0%">
+                    <Setter Property="Opacity" Value="0.6"/>
+                </KeyFrame>
+                <KeyFrame Cue="50%">
+                    <Setter Property="Opacity" Value="1"/>
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="Opacity" Value="0.6"/>
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- Label Styles -->
+    <Style Selector="Label">
+        <Setter Property="Foreground" Value="{StaticResource LightText}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
 </Styles>

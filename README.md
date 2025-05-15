@@ -1,6 +1,6 @@
 # Log Analyzer for Windows
 
-![Screenshot of the application](Screenshots/Screen.png)
+![Screenshot of the application](Screenshots/Screen1.png)
 
 This project is a log analyzer for Windows, which reads system logs, filters them based on the selected log level and time interval, and displays the results in a user-friendly format. The application also provides features to save the logs in different formats (txt, json), archive the logs, and send the logs via email.
 
@@ -15,7 +15,7 @@ This project is a log analyzer for Windows, which reads system logs, filters the
 
 ## Requirements
 
-- The primary language of the operating system must be either English or Russian for the application to work correctly.
+- The primary language of the operating system must be English for the application to work correctly.
 
 ## Usage
 

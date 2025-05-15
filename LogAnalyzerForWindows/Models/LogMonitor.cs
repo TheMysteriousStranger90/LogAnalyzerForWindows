@@ -9,48 +9,71 @@ namespace LogAnalyzerForWindows.Models;
 
 public class LogMonitor : ILogMonitor
 {
+    private HashSet<LogEntry> _lastProcessedLogs = new HashSet<LogEntry>();
     public event Action<IEnumerable<LogEntry>> LogsChanged;
     public event Action MonitoringStarted;
     public event Action MonitoringStopped;
-
     private CancellationTokenSource _cts;
-    private bool _isMonitoring;
+    private volatile bool _isMonitoring;
 
-    public bool IsMonitoring
-    {
-        get { return _isMonitoring; }
-    }
+    public bool IsMonitoring => _isMonitoring;
 
     public void Monitor(ILogReader reader)
     {
+        if (reader == null) throw new ArgumentNullException(nameof(reader));
+        if (_isMonitoring) return;
+
         _cts = new CancellationTokenSource();
-        IEnumerable<LogEntry> previousLogs = null;
         _isMonitoring = true;
         MonitoringStarted?.Invoke();
 
-        while (!_cts.Token.IsCancellationRequested)
+        try
         {
-            IEnumerable<LogEntry> currentLogs = reader.ReadLogs();
-
-            if (previousLogs == null || !currentLogs.SequenceEqual(previousLogs))
+            while (!_cts.Token.IsCancellationRequested)
             {
-                LogsChanged?.Invoke(currentLogs);
-                previousLogs = currentLogs;
+                List<LogEntry> currentLogs;
+                try
+                {
+                    currentLogs = reader.ReadLogs().ToList();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
+                    Thread.Sleep(5000);
+                    continue;
+                }
+
+                var newLogs = currentLogs.Except(_lastProcessedLogs).ToList();
+
+                if (newLogs.Any())
+                {
+                    LogsChanged?.Invoke(newLogs);
+                    _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
+                }
+
+                try
+                {
+                    bool cancelled = _cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+                    if (cancelled || _cts.Token.IsCancellationRequested) break;
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
-
-            Thread.Sleep(1000);
         }
-
-        if (!_cts.Token.IsCancellationRequested)
+        finally
         {
             _isMonitoring = false;
             MonitoringStopped?.Invoke();
+            _cts?.Dispose();
+            _cts = null;
         }
     }
 
     public void StopMonitoring()
     {
-        if (_cts != null)
+        if (_cts != null && !_cts.IsCancellationRequested)
         {
             _cts.Cancel();
         }

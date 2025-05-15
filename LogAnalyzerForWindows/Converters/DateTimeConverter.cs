@@ -13,7 +13,6 @@ public class DateTimeConverter : JsonConverter<DateTime?>
         {
             return date;
         }
-
         return null;
     }
 
