@@ -1,18 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Collections;
-using Avalonia.Controls;
 using Avalonia.Threading;
 using LogAnalyzerForWindows.Commands;
 using LogAnalyzerForWindows.Filter;
@@ -45,8 +41,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
     private ICommand _sendEmailCommand;
     private Action<IEnumerable<LogEntry>> _onLogsChangedHandler;
 
-    private readonly HashSet<LogEntry>
-        _processedLogs = new HashSet<LogEntry>();
+    private readonly HashSet<LogEntry> _processedLogs = new HashSet<LogEntry>();
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
@@ -73,10 +68,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
         get => _outputText;
         set
         {
-            if (SetProperty(ref _outputText, value))
-            {
-                CanSave = !string.IsNullOrEmpty(_outputText);
-            }
+            SetProperty(ref _outputText, value);
         }
     }
 
@@ -109,7 +101,13 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
     public string SelectedFormat
     {
         get => _selectedFormat;
-        set => SetProperty(ref _selectedFormat, value);
+        set
+        {
+            if (SetProperty(ref _selectedFormat, value))
+            {
+                UpdateCanSaveState();
+            }
+        }
     }
 
 
@@ -188,27 +186,23 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
     public MainWindowViewModel()
     {
-        // Initialize LogLevelTranslations based on current culture
         LogLevelTranslations = CultureInfo.CurrentUICulture.Name.StartsWith("ru", StringComparison.OrdinalIgnoreCase)
             ? LogLevelTranslationsHelper.LogLevelTranslationsRussian
             : LogLevelTranslationsHelper.LogLevelTranslationsEnglish;
 
-        _emailService = new EmailService(); // Consider injecting via DI
-        _fileSystemService = new FileSystemService(); // Consider injecting via DI
+        _emailService = new EmailService();
+        _fileSystemService = new FileSystemService();
 
         _monitor = new LogMonitor();
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
-        // _monitor.LogsChanged is subscribed in StartMonitoring
 
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
-        SaveCommand = new RelayCommand(SaveLogs, () => CanSave); // CanSave is already a property
+        SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
         OpenFolderCommand = new RelayCommand(OpenLogFolder, () => IsFolderExists);
         ArchiveLatestFolderCommand = new RelayCommand(ArchiveLogFolder, () => IsFolderExists);
 
-
-        // Ensure the directory for FileSystemWatcher exists or handle creation carefully
         string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         if (!Directory.Exists(Path.Combine(documentsPath, "LogAnalyzerForWindows")))
         {
@@ -217,15 +211,14 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
         _folderWatcher = new FileSystemWatcher(documentsPath)
         {
-            Filter = "LogAnalyzerForWindows", // This watches for changes *to the folder itself* if it's a direct child
-            NotifyFilter =
-                NotifyFilters.DirectoryName | NotifyFilters.FileName, // Watch for sub-directory or file changes
-            IncludeSubdirectories = true // Watch subdirectories like the date folders
+            Filter = "LogAnalyzerForWindows",
+            NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName,
+            IncludeSubdirectories = true
         };
         _folderWatcher.Created += OnLogDirectoryChanged;
         _folderWatcher.Deleted += OnLogDirectoryChanged;
-        _folderWatcher.Renamed += OnLogDirectoryChanged; // Good to handle renames too
-        _folderWatcher.Changed += OnLogDirectoryChanged; // For changes within files/folders if needed
+        _folderWatcher.Renamed += OnLogDirectoryChanged;
+        _folderWatcher.Changed += OnLogDirectoryChanged;
 
         try
         {
@@ -237,6 +230,13 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
         }
 
         OnPropertyChanged(nameof(IsFolderExists));
+        UpdateCanSaveState();
+    }
+
+    private void UpdateCanSaveState()
+    {
+        CanSave = _processedLogs.Any() && !string.IsNullOrEmpty(SelectedFormat);
+        (SaveCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private bool CanStartMonitoring() => !string.IsNullOrEmpty(SelectedLogLevel) &&
@@ -250,18 +250,15 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
         IsLoading = true;
         TextBlock = "Starting monitoring...";
-        OutputText = string.Empty; // Clear previous output
+        OutputText = string.Empty;
         _processedLogs.Clear();
+        UpdateCanSaveState();
 
-        // This task will run the monitor loop.
-        // We don't await it here because Monitor itself is a long-running blocking loop.
         Task.Run(() =>
         {
-            ILogReader reader = new WindowsEventLogReader("System"); // Consider making "System" configurable
-            // The analyzer for filtering by level is created inside _onLogsChangedHandler
-            // The main analyzer passed to LogManager could be a general one or null if not needed there.
-            LogAnalyzer generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel); // Example, or could be different
-            ILogFormatter formatter = new LogFormatter(); // Used by TextBoxLogWriter
+            ILogReader reader = new WindowsEventLogReader("System");
+            LogAnalyzer generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
+            ILogFormatter formatter = new LogFormatter();
             ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputTextOnUiThread);
 
             LogManager manager = new LogManager(reader, generalAnalyzer, formatter, writer);
@@ -283,9 +280,9 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
                     {
                         TextBlock = $"Error: Unknown time interval '{SelectedTime}'.";
                         IsLoading = false;
-                        OnMonitoringStateChanged(); // Update button states
+                        OnMonitoringStateChanged();
                     });
-                    return; // Exit task
+                    return;
             }
 
             TimeFilter timeFilter = new TimeFilter(timeSpan);
@@ -300,20 +297,20 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
                 );
 
                 var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
-                    .Where(log => _processedLogs.Add(log)) // HashSet.Add returns true if item was added
+                    .Where(log => _processedLogs.Add(log))
                     .ToList();
 
-                if (newUniqueLevelLogs.Any())
+                Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    manager.ProcessLogs(newUniqueLevelLogs); // Process only new, unique, filtered logs for display
-                    // Analyze all processed logs for the summary count
-                    // generalAnalyzer.Analyze(_processedLogs); // This was writing to console, TextBlock is updated below
-                    Dispatcher.UIThread.InvokeAsync(() =>
+                    UpdateCanSaveState();
+
+                    if (newUniqueLevelLogs.Any())
                     {
+                        manager.ProcessLogs(newUniqueLevelLogs);
                         TextBlock =
                             $"Monitoring... Unique '{SelectedLogLevel}' logs found: {_processedLogs.Count(l => l.Level?.Equals(SelectedLogLevel, StringComparison.OrdinalIgnoreCase) ?? false)}";
-                    });
-                }
+                    }
+                });
             };
 
             _monitor.LogsChanged += _onLogsChangedHandler;
@@ -377,7 +374,6 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
                     {
                         return formatter.Format(log).Message;
                     }
-
                     return formatter.Format(log).ToString();
                 });
 
@@ -470,17 +466,12 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
             if (_monitor.IsMonitoring)
             {
                 TextBlock = "Monitoring started.";
-                IsLoading = false; // Assuming monitor started successfully, actual log processing will update IsLoading if needed
+                IsLoading = false;
             }
-            else // Monitoring stopped
+            else
             {
                 TextBlock = "Monitoring stopped.";
                 IsLoading = false;
-                // Optionally reset selections when monitoring stops:
-                // SelectedLogLevel = null;
-                // SelectedTime = null;
-                // _processedLogs.Clear(); // Already cleared in StartMonitoring, but could be here too if stop is not followed by start
-                // OutputText = string.Empty; // Clear output on stop
             }
         });
     }
