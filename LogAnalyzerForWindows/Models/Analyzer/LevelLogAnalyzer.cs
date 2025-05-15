@@ -6,30 +6,38 @@ namespace LogAnalyzerForWindows.Models.Analyzer;
 
 public class LevelLogAnalyzer : LogAnalyzer
 {
-    private string _level;
+    private readonly string _levelToAnalyze;
 
     public LevelLogAnalyzer(string level)
     {
-        _level = level;
+        if (string.IsNullOrWhiteSpace(level))
+        {
+            throw new ArgumentException("Level cannot be null or whitespace.", nameof(level));
+        }
+
+        _levelToAnalyze = level.ToLowerInvariant();
     }
 
     public override void Analyze(IEnumerable<LogEntry> logs)
     {
-        int count = 0;
-
-        foreach (var log in logs)
+        if (logs == null)
         {
-            if (log.Level?.ToLower() == _level?.ToLower())
-            {
-                count++;
-            }
+            Console.WriteLine($"Number of {_levelToAnalyze} logs: 0");
+            return;
         }
 
-        Console.WriteLine($"Number of {_level} logs: {count}");
+        int count = logs.Count(log => log?.Level?.ToLowerInvariant() == _levelToAnalyze);
+
+        Console.WriteLine($"Number of {_levelToAnalyze} logs: {count}");
     }
 
     public IEnumerable<LogEntry> FilterByLevel(IEnumerable<LogEntry> logs)
     {
-        return logs.Where(log => log.Level?.ToLower() == _level?.ToLower());
+        if (logs == null)
+        {
+            return Enumerable.Empty<LogEntry>();
+        }
+
+        return logs.Where(log => log?.Level?.ToLowerInvariant() == _levelToAnalyze);
     }
 }

@@ -6,18 +6,20 @@ namespace LogAnalyzerForWindows.Models.Writer;
 
 public class TextBoxLogWriter : ILogWriter
 {
-    private ILogFormatter _formatter;
-    private Action<string> _updateAction;
+    private readonly ILogFormatter _formatter;
+    private readonly Action<string> _updateAction;
 
     public TextBoxLogWriter(ILogFormatter formatter, Action<string> updateAction)
     {
-        _formatter = formatter;
-        _updateAction = updateAction;
+        _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
+        _updateAction = updateAction ?? throw new ArgumentNullException(nameof(updateAction));
     }
 
     public void Write(LogEntry log)
     {
-        string formattedLog = _formatter.Format(log).ToString();
-        _updateAction(formattedLog);
+        if (log == null) return;
+        
+        string formattedLogString = _formatter.Format(log).ToString();
+        _updateAction(formattedLogString);
     }
 }

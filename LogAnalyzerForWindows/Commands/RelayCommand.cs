@@ -10,7 +10,7 @@ public class RelayCommand : ICommand
 
     public RelayCommand(Action execute, Func<bool> canExecute = null)
     {
-        _execute = execute;
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
         _canExecute = canExecute;
     }
 

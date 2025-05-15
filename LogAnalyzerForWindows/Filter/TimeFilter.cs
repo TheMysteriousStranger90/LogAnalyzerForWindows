@@ -8,8 +8,8 @@ namespace LogAnalyzerForWindows.Filter;
 
 public class TimeFilter
 {
-    private TimeSpan _timeSpan;
-    private ITimeProvider _timeProvider;
+    private readonly TimeSpan _timeSpan;
+    private readonly ITimeProvider _timeProvider;
 
     public TimeFilter(TimeSpan timeSpan, ITimeProvider timeProvider = null)
     {
@@ -22,6 +22,6 @@ public class TimeFilter
         if (logs == null) throw new ArgumentNullException(nameof(logs));
 
         var cutoff = _timeProvider.GetCurrentTime() - _timeSpan;
-        return logs.Where(log => log.Timestamp >= cutoff);
+        return logs.Where(log => log.Timestamp.HasValue && log.Timestamp.Value >= cutoff);
     }
 }

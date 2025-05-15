@@ -31,27 +31,27 @@ using LogAnalyzerForWindows.Services;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
-public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
+public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged, IDisposable
 {
     private readonly IEmailService _emailService;
     private readonly IFileSystemService _fileSystemService;
+    private readonly LogMonitor _monitor;
+    private readonly FileSystemWatcher _folderWatcher;
 
     private string _selectedLogLevel;
     private string _selectedTime;
     private ICommand _startCommand;
     private ICommand _stopCommand;
     private ICommand _sendEmailCommand;
-    public ICommand SaveCommand => new RelayCommand(Save);
-    public ICommand OpenFolderCommand => new RelayCommand(OpenFolder);
-    public ICommand ArchiveLatestFolderCommand => new RelayCommand(ArchiveLatestFolder);
-    private Action<IEnumerable<LogEntry>> _onLogsChanged;
-    private FileSystemWatcher _folderWatcher;
-    private HashSet<LogEntry> _processedLogs = new HashSet<LogEntry>();
+    private Action<IEnumerable<LogEntry>> _onLogsChangedHandler;
+
+    private readonly HashSet<LogEntry>
+        _processedLogs = new HashSet<LogEntry>();
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
 
-    public static Dictionary<string, string> LogLevelTranslations;
+    public static Dictionary<string, string> LogLevelTranslations { get; private set; }
 
     public AvaloniaList<string> Times { get; } =
         new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
@@ -62,28 +62,19 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public string TextBlock
     {
-        get { return _textBlock; }
-        set
-        {
-            if (value != _textBlock)
-            {
-                _textBlock = value;
-                OnPropertyChanged();
-            }
-        }
+        get => _textBlock;
+        set => SetProperty(ref _textBlock, value);
     }
 
-    private string _outputText;
+    private string _outputText = string.Empty;
 
     public string OutputText
     {
-        get { return _outputText; }
+        get => _outputText;
         set
         {
-            if (value != _outputText)
+            if (SetProperty(ref _outputText, value))
             {
-                _outputText = value;
-                OnPropertyChanged(nameof(OutputText));
                 CanSave = !string.IsNullOrEmpty(_outputText);
             }
         }
@@ -91,179 +82,189 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public string SelectedLogLevel
     {
-        get { return _selectedLogLevel; }
+        get => _selectedLogLevel;
         set
         {
-            if (value != _selectedLogLevel)
+            if (SetProperty(ref _selectedLogLevel, value))
             {
-                _selectedLogLevel = value;
-                OnPropertyChanged();
-                ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
+                (StartCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
 
     public string SelectedTime
     {
-        get { return _selectedTime; }
+        get => _selectedTime;
         set
         {
-            if (value != _selectedTime)
+            if (SetProperty(ref _selectedTime, value))
             {
-                _selectedTime = value;
-                OnPropertyChanged();
-                ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
+                (StartCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
+
+    private string _selectedFormat = "txt";
+
+    public string SelectedFormat
+    {
+        get => _selectedFormat;
+        set => SetProperty(ref _selectedFormat, value);
+    }
+
 
     private bool _isLoading;
 
     public bool IsLoading
     {
-        get { return _isLoading; }
-        set
-        {
-            _isLoading = value;
-            OnPropertyChanged();
-        }
+        get => _isLoading;
+        set => SetProperty(ref _isLoading, value);
     }
 
     private bool _canSave;
 
     public bool CanSave
     {
-        get { return _canSave; }
-        set
-        {
-            if (value != _canSave)
-            {
-                _canSave = value;
-                OnPropertyChanged();
-            }
-        }
+        get => _canSave;
+        private set => SetProperty(ref _canSave, value);
     }
 
     private string _userEmail;
 
     public string UserEmail
     {
-        get { return _userEmail; }
+        get => _userEmail;
         set
         {
-            _userEmail = value;
-            OnPropertyChanged();
-            ((RelayCommand)_sendEmailCommand)?.RaiseCanExecuteChanged();
+            if (SetProperty(ref _userEmail, value))
+            {
+                (_sendEmailCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
         }
     }
 
-    public bool IsFolderExists
-    {
-        get
-        {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "LogAnalyzerForWindows");
-            return Directory.Exists(defaultPath);
-        }
-    }
+    private static string DefaultLogFolderPath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+
+    public bool IsFolderExists => Directory.Exists(DefaultLogFolderPath);
+
 
     public ICommand StartCommand
     {
-        get { return _startCommand; }
-        set
-        {
-            if (value != _startCommand)
-            {
-                _startCommand = value;
-                OnPropertyChanged();
-            }
-        }
+        get => _startCommand;
+        set => SetProperty(ref _startCommand, value);
     }
 
     public ICommand StopCommand
     {
-        get { return _stopCommand; }
-        set
-        {
-            if (value != _stopCommand)
-            {
-                _stopCommand = value;
-                OnPropertyChanged();
-            }
-        }
+        get => _stopCommand;
+        set => SetProperty(ref _stopCommand, value);
     }
 
-    public ICommand SendEmailCommand
+    public ICommand SaveCommand { get; }
+    public ICommand OpenFolderCommand { get; }
+    public ICommand ArchiveLatestFolderCommand { get; }
+
+
+    public ICommand SendEmailCommand => _sendEmailCommand ??= new RelayCommand(
+        async () => await SendEmailAsync(),
+        CanSendEmail
+    );
+
+    private bool CanSendEmail()
     {
-        get
+        if (!EmailSender.IsValidEmail(UserEmail)) return false;
+        try
         {
-            return _sendEmailCommand ?? (_sendEmailCommand = new RelayCommand(
-                async () => await SendEmailAsync(),
-                () => EmailSender.IsValidEmail(UserEmail) && Directory.GetFiles(Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "LogAnalyzerForWindows"), "*.zip").Length > 0));
+            return Directory.Exists(DefaultLogFolderPath) && Directory.GetFiles(DefaultLogFolderPath, "*.zip").Any();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error checking for zip files: {ex.Message}");
+            return false;
         }
     }
 
-    public string SelectedFormat { get; set; }
-
-    private LogMonitor _monitor;
 
     public MainWindowViewModel()
     {
-        if (CultureInfo.CurrentCulture.Name.StartsWith("ru"))
-        {
-            LogLevelTranslations = LogLevelTranslationsHelper.LogLevelTranslationsRussian;
-        }
-        else
-        {
-            LogLevelTranslations = LogLevelTranslationsHelper.LogLevelTranslationsEnglish;
-        }
+        // Initialize LogLevelTranslations based on current culture
+        LogLevelTranslations = CultureInfo.CurrentUICulture.Name.StartsWith("ru", StringComparison.OrdinalIgnoreCase)
+            ? LogLevelTranslationsHelper.LogLevelTranslationsRussian
+            : LogLevelTranslationsHelper.LogLevelTranslationsEnglish;
 
-        _emailService = new EmailService();
-        _fileSystemService = new FileSystemService();
+        _emailService = new EmailService(); // Consider injecting via DI
+        _fileSystemService = new FileSystemService(); // Consider injecting via DI
 
         _monitor = new LogMonitor();
-
-        _monitor.MonitoringStarted += OnMonitoringStartedOrStopped;
-        _monitor.MonitoringStopped += OnMonitoringStartedOrStopped;
+        _monitor.MonitoringStarted += OnMonitoringStateChanged;
+        _monitor.MonitoringStopped += OnMonitoringStateChanged;
+        // _monitor.LogsChanged is subscribed in StartMonitoring
 
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
+        SaveCommand = new RelayCommand(SaveLogs, () => CanSave); // CanSave is already a property
+        OpenFolderCommand = new RelayCommand(OpenLogFolder, () => IsFolderExists);
+        ArchiveLatestFolderCommand = new RelayCommand(ArchiveLogFolder, () => IsFolderExists);
 
-        _folderWatcher = new FileSystemWatcher(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments))
+
+        // Ensure the directory for FileSystemWatcher exists or handle creation carefully
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        if (!Directory.Exists(Path.Combine(documentsPath, "LogAnalyzerForWindows")))
         {
-            Filter = "LogAnalyzerForWindows",
-            NotifyFilter = NotifyFilters.DirectoryName
+            Directory.CreateDirectory(Path.Combine(documentsPath, "LogAnalyzerForWindows"));
+        }
+
+        _folderWatcher = new FileSystemWatcher(documentsPath)
+        {
+            Filter = "LogAnalyzerForWindows", // This watches for changes *to the folder itself* if it's a direct child
+            NotifyFilter =
+                NotifyFilters.DirectoryName | NotifyFilters.FileName, // Watch for sub-directory or file changes
+            IncludeSubdirectories = true // Watch subdirectories like the date folders
         };
-        _folderWatcher.Created += OnFolderChanged;
-        _folderWatcher.Deleted += OnFolderChanged;
-        _folderWatcher.EnableRaisingEvents = true;
+        _folderWatcher.Created += OnLogDirectoryChanged;
+        _folderWatcher.Deleted += OnLogDirectoryChanged;
+        _folderWatcher.Renamed += OnLogDirectoryChanged; // Good to handle renames too
+        _folderWatcher.Changed += OnLogDirectoryChanged; // For changes within files/folders if needed
+
+        try
+        {
+            _folderWatcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to enable FileSystemWatcher: {ex.Message}");
+        }
+
+        OnPropertyChanged(nameof(IsFolderExists));
     }
 
-    private bool CanStartMonitoring()
-    {
-        return SelectedLogLevel != null && SelectedTime != null;
-    }
+    private bool CanStartMonitoring() => !string.IsNullOrEmpty(SelectedLogLevel) &&
+                                         !string.IsNullOrEmpty(SelectedTime) && !_monitor.IsMonitoring;
 
-    private bool CanStopMonitoring()
-    {
-        return _monitor.IsMonitoring;
-    }
+    private bool CanStopMonitoring() => _monitor.IsMonitoring;
 
     private void StartMonitoring()
     {
-        Task.Run(async () =>
+        if (!CanStartMonitoring()) return;
+
+        IsLoading = true;
+        TextBlock = "Starting monitoring...";
+        OutputText = string.Empty; // Clear previous output
+        _processedLogs.Clear();
+
+        // This task will run the monitor loop.
+        // We don't await it here because Monitor itself is a long-running blocking loop.
+        Task.Run(() =>
         {
-            IsLoading = true;
-            TextBlock = "Starting monitoring...";
+            ILogReader reader = new WindowsEventLogReader("System"); // Consider making "System" configurable
+            // The analyzer for filtering by level is created inside _onLogsChangedHandler
+            // The main analyzer passed to LogManager could be a general one or null if not needed there.
+            LogAnalyzer generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel); // Example, or could be different
+            ILogFormatter formatter = new LogFormatter(); // Used by TextBoxLogWriter
+            ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputTextOnUiThread);
 
-            ILogReader reader = new WindowsEventLogReader("System");
-            LogAnalyzer analyzer = new LevelLogAnalyzer(SelectedLogLevel);
-            ILogFormatter formatter = new LogFormatter();
-            ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputText);
-
-            LogManager manager = new LogManager(reader, analyzer, formatter, writer);
+            LogManager manager = new LogManager(reader, generalAnalyzer, formatter, writer);
 
             TimeSpan timeSpan;
             switch (SelectedTime)
@@ -278,214 +279,270 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                     timeSpan = TimeSpan.FromDays(3);
                     break;
                 default:
-                    throw new InvalidOperationException($"Unknown time interval: {SelectedTime}");
+                    Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        TextBlock = $"Error: Unknown time interval '{SelectedTime}'.";
+                        IsLoading = false;
+                        OnMonitoringStateChanged(); // Update button states
+                    });
+                    return; // Exit task
             }
 
-            TimeFilter filter = new TimeFilter(timeSpan);
+            TimeFilter timeFilter = new TimeFilter(timeSpan);
 
-            HashSet<LogEntry> uniqueLogs = new HashSet<LogEntry>();
-
-            if (_onLogsChanged == null)
+            _onLogsChangedHandler = (incomingLogs) =>
             {
-                _onLogsChanged = (logs) =>
+                var relevantLogs = timeFilter.Filter(incomingLogs);
+                var levelAnalyzer = new LevelLogAnalyzer(
+                    LogLevelTranslations.TryGetValue(SelectedLogLevel, out var translatedLevel)
+                        ? translatedLevel
+                        : SelectedLogLevel
+                );
+
+                var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
+                    .Where(log => _processedLogs.Add(log)) // HashSet.Add returns true if item was added
+                    .ToList();
+
+                if (newUniqueLevelLogs.Any())
                 {
-                    var filteredLogs = filter.Filter(logs);
-                    var analyzer = new LevelLogAnalyzer(
-                        SelectedLogLevel != null && LogLevelTranslations.ContainsKey(SelectedLogLevel)
-                            ? LogLevelTranslations[SelectedLogLevel]
-                            : SelectedLogLevel);
-                        
-                    var levelLogs = analyzer.FilterByLevel(filteredLogs)
-                        .Where(log => !_processedLogs.Contains(log))
-                        .ToList();
-
-                    foreach (var log in levelLogs)
+                    manager.ProcessLogs(newUniqueLevelLogs); // Process only new, unique, filtered logs for display
+                    // Analyze all processed logs for the summary count
+                    // generalAnalyzer.Analyze(_processedLogs); // This was writing to console, TextBlock is updated below
+                    Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        string pattern = @"^(\d{2}\.\d{2}\.\d{4} \d{1,2}:\d{2}:\d{2})(?:\s+\1)+";
-                        log.Message = Regex.Replace(log.Message, pattern, "$1");
-                        _processedLogs.Add(log);
-                    }
+                        TextBlock =
+                            $"Monitoring... Unique '{SelectedLogLevel}' logs found: {_processedLogs.Count(l => l.Level?.Equals(SelectedLogLevel, StringComparison.OrdinalIgnoreCase) ?? false)}";
+                    });
+                }
+            };
 
-                    if (levelLogs.Any())
-                    {
-                        manager.ProcessLogs(levelLogs);
-                        analyzer.Analyze(_processedLogs);
-                        TextBlock = $"Number of unique logs: {_processedLogs.Count}";
-                    }
-                };
+            _monitor.LogsChanged += _onLogsChangedHandler;
+            _monitor.Monitor(reader);
+        }).ContinueWith(task =>
+        {
+            if (task.IsFaulted)
+            {
+                Debug.WriteLine($"Monitoring task faulted: {task.Exception?.GetBaseException().Message}");
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = $"Error during monitoring: {task.Exception?.GetBaseException().Message}";
+                    IsLoading = false;
+                    if (_monitor.IsMonitoring) _monitor.StopMonitoring();
+                    else OnMonitoringStateChanged();
+                });
             }
-
-            _monitor.LogsChanged += _onLogsChanged;
-
-            await Task.Run(() => { _monitor.Monitor(reader); });
-
-            IsLoading = false;
-            TextBlock = "Monitoring started.";
-
-            ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
         });
     }
 
+
     private void StopMonitoring()
     {
+        if (!CanStopMonitoring()) return;
+
+        TextBlock = "Stopping monitoring...";
         _monitor.StopMonitoring();
-        TextBlock = "Monitoring stopped.";
 
-        if (_onLogsChanged != null)
+        if (_onLogsChangedHandler != null)
         {
-            _monitor.LogsChanged -= _onLogsChanged;
-            _onLogsChanged = null;
+            _monitor.LogsChanged -= _onLogsChangedHandler;
+            _onLogsChangedHandler = null;
         }
-
-        SelectedLogLevel = null;
-        SelectedTime = null;
-        IsLoading = false;
-        _processedLogs.Clear();
-        ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
-        ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
     }
 
-    private void Save()
+    private void SaveLogs()
     {
-        try
+        if (string.IsNullOrEmpty(SelectedFormat) || !_processedLogs.Any())
         {
-            if (string.IsNullOrEmpty(SelectedFormat))
-            {
-                return;
-            }
+            TextBlock = "No logs to save or format not selected.";
+            return;
+        }
 
-            ILogFormatter formatter;
-            switch (SelectedFormat)
-            {
-                case "txt":
-                    formatter = new LogFormatter();
-                    break;
-                case "json":
-                    formatter = new JsonLogFormatter();
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unknown format: {SelectedFormat}");
-            }
+        TextBlock = "Saving logs...";
+        IsLoading = true;
 
-            var logEntries = OutputText.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(line =>
+        Task.Run(() =>
+        {
+            try
+            {
+                ILogFormatter formatter = SelectedFormat.ToLowerInvariant() switch
                 {
-                    var match = Regex.Match(line,
-                        @"^(?<timestamp>\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}) (?<level>\w+) (?<message>.+)$");
-                    if (match.Success)
+                    "json" => new JsonLogFormatter(),
+                    "txt" => new LogFormatter(),
+                    _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
+                };
+
+                var linesToSave = _processedLogs.Select(log =>
+                {
+                    if (formatter is JsonLogFormatter)
                     {
-                        var timestamp = DateTime.ParseExact(match.Groups["timestamp"].Value, "dd.MM.yyyy HH:mm:ss",
-                            CultureInfo.InvariantCulture);
-                        var level = match.Groups["level"].Value;
-                        var message = match.Groups["message"].Value;
-                        return new LogEntry { Timestamp = timestamp, Level = level, Message = message };
+                        return formatter.Format(log).Message;
                     }
-                    else
-                    {
-                        return new LogEntry { Message = line };
-                    }
+
+                    return formatter.Format(log).ToString();
                 });
 
-            var formattedLogs = logEntries.Select(log => formatter.Format(log).Message);
+                string logsContent = string.Join(Environment.NewLine, linesToSave);
+                string filePath = LogPathHelper.GetLogFilePath(SelectedFormat);
+                File.WriteAllText(filePath, logsContent);
 
-            string logs = string.Join(Environment.NewLine, formattedLogs);
-
-            string filePath = LogPathHelper.GetLogFilePath(SelectedFormat);
-
-            File.WriteAllText(filePath, logs);
-            TextBlock = "Logs saved successfully.";
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"An error occurred: {ex.Message}");
-            TextBlock = $"An error occurred: {ex.Message}";
-        }
+                Dispatcher.UIThread.InvokeAsync(() => TextBlock = $"Logs saved to: {filePath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error saving logs: {ex.Message}");
+                Dispatcher.UIThread.InvokeAsync(() => TextBlock = $"Error saving logs: {ex.Message}");
+            }
+            finally
+            {
+                Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
+            }
+        });
     }
 
-    private void OpenFolder()
+    private void OpenLogFolder()
     {
-        try
-        {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "LogAnalyzerForWindows");
-            _fileSystemService.OpenFolder(defaultPath, UpdateTextBlock);
-
-            TextBlock = "Folder opened.";
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"An error occurred: {ex.Message}");
-            TextBlock = $"An error occurred: {ex.Message}";
-        }
+        _fileSystemService.OpenFolder(DefaultLogFolderPath, UpdateTextBlockOnUiThread);
     }
 
-    private void ArchiveLatestFolder()
+    private void ArchiveLogFolder()
     {
-        try
+        TextBlock = "Archiving...";
+        IsLoading = true;
+        Task.Run(() =>
         {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "LogAnalyzerForWindows");
-
-            _fileSystemService.ArchiveLatestFolder(defaultPath, UpdateTextBlock);
-            TextBlock = "Latest folder archived.";
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"An error occurred: {ex.Message}");
-            TextBlock = $"An error occurred: {ex.Message}";
-        }
+            _fileSystemService.ArchiveLatestFolder(DefaultLogFolderPath, UpdateTextBlockOnUiThread);
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                IsLoading = false;
+                (_sendEmailCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            });
+        });
     }
 
     private async Task SendEmailAsync()
     {
+        TextBlock = "Sending email...";
+        IsLoading = true;
         try
         {
-            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "LogAnalyzerForWindows");
-            var zipFiles = Directory.GetFiles(defaultPath, "*.zip");
-            var latestZipFile = zipFiles.OrderByDescending(f => File.GetCreationTime(f)).First();
+            var zipFiles = Directory.GetFiles(DefaultLogFolderPath, "*.zip");
+            if (!zipFiles.Any())
+            {
+                TextBlock = "No archive files found to send.";
+                return;
+            }
 
-            await _emailService.SendEmailAsync("Recipient Name", UserEmail, "Log Analyzer For Windows",
-                "Here is the latest log file.", latestZipFile);
-            TextBlock = "Email sent.";
+            var latestZipFile = zipFiles.OrderByDescending(File.GetCreationTimeUtc).First();
+
+            await _emailService.SendEmailAsync("Log Analysis Recipient", UserEmail, "Log Analyzer For Windows - Logs",
+                $"Please find the latest log archive attached ({Path.GetFileName(latestZipFile)}).", latestZipFile);
+            TextBlock = "Email sent successfully.";
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"An error occurred: {ex.Message}");
-            TextBlock = $"An error occurred: {ex.Message}";
+            Debug.WriteLine($"Error sending email: {ex.Message}");
+            TextBlock = $"Error sending email: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
         }
     }
 
-    private void OnFolderChanged(object sender, FileSystemEventArgs e)
-    {
-        OnPropertyChanged(nameof(IsFolderExists));
-    }
-
-    private void OnMonitoringStartedOrStopped()
+    private void OnLogDirectoryChanged(object sender, FileSystemEventArgs e)
     {
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            ((RelayCommand)StartCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)StopCommand).RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(IsFolderExists));
+            (OpenFolderCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ArchiveLatestFolderCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (_sendEmailCommand as RelayCommand)?.RaiseCanExecuteChanged();
         });
     }
 
-    private void UpdateTextBlock(string message)
+    private void OnMonitoringStateChanged()
     {
-        TextBlock = message;
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            (StartCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (StopCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
+            if (_monitor.IsMonitoring)
+            {
+                TextBlock = "Monitoring started.";
+                IsLoading = false; // Assuming monitor started successfully, actual log processing will update IsLoading if needed
+            }
+            else // Monitoring stopped
+            {
+                TextBlock = "Monitoring stopped.";
+                IsLoading = false;
+                // Optionally reset selections when monitoring stops:
+                // SelectedLogLevel = null;
+                // SelectedTime = null;
+                // _processedLogs.Clear(); // Already cleared in StartMonitoring, but could be here too if stop is not followed by start
+                // OutputText = string.Empty; // Clear output on stop
+            }
+        });
     }
 
-    private void UpdateOutputText(string text)
+
+    private void UpdateTextBlockOnUiThread(string message)
     {
-        OutputText += text + Environment.NewLine;
-        IsLoading = false;
+        Dispatcher.UIThread.InvokeAsync(() => TextBlock = message);
+    }
+
+    private void UpdateOutputTextOnUiThread(string text)
+    {
+        Dispatcher.UIThread.InvokeAsync(() => { OutputText += text + Environment.NewLine; });
     }
 
     public event PropertyChangedEventHandler PropertyChanged;
 
+    private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
     private void OnPropertyChanged([CallerMemberName] string propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private bool _disposedValue;
+
+    private void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _monitor.MonitoringStarted -= OnMonitoringStateChanged;
+                _monitor.MonitoringStopped -= OnMonitoringStateChanged;
+                if (_onLogsChangedHandler != null)
+                {
+                    _monitor.LogsChanged -= _onLogsChangedHandler;
+                }
+
+                _monitor.StopMonitoring();
+
+                _folderWatcher.Created -= OnLogDirectoryChanged;
+                _folderWatcher.Deleted -= OnLogDirectoryChanged;
+                _folderWatcher.Renamed -= OnLogDirectoryChanged;
+                _folderWatcher.Changed -= OnLogDirectoryChanged;
+                _folderWatcher.EnableRaisingEvents = false;
+                _folderWatcher.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }
