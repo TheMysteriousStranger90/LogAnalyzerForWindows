@@ -9,3 +9,11 @@ LogAnalyzerForWindows/bin
 LogAnalyzerForWindows/obj
 
 .idea/
+
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
