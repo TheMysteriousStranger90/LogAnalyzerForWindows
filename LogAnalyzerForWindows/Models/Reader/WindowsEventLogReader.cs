@@ -29,6 +29,7 @@ public class WindowsEventLogReader : ILogReader
 
         switch (eventTypeStr)
         {
+            // Russian
             case "Ошибка":
                 return "Error";
             case "Предупреждение":
@@ -38,6 +39,17 @@ public class WindowsEventLogReader : ILogReader
             case "Успешный аудит":
                 return "AuditSuccess";
             case "Ошибка аудита":
+                return "AuditFailure";
+            // English
+            case "Error":
+                return "Error";
+            case "Warning":
+                return "Warning";
+            case "Information":
+                return "Information";
+            case "Audit Success":
+                return "AuditSuccess";
+            case "Audit Failure":
                 return "AuditFailure";
         }
 
