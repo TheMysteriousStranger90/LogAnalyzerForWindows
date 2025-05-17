@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 
@@ -15,7 +16,6 @@ public class LogMonitor : ILogMonitor
     public event Action MonitoringStopped;
     private CancellationTokenSource _cts;
     private volatile bool _isMonitoring;
-
     public bool IsMonitoring => _isMonitoring;
 
     public void Monitor(ILogReader reader)
@@ -23,52 +23,61 @@ public class LogMonitor : ILogMonitor
         if (reader == null) throw new ArgumentNullException(nameof(reader));
         if (_isMonitoring) return;
 
+        _lastProcessedLogs = new HashSet<LogEntry>();
+
         _cts = new CancellationTokenSource();
         _isMonitoring = true;
         MonitoringStarted?.Invoke();
 
-        try
+        Task.Run(() =>
         {
-            while (!_cts.Token.IsCancellationRequested)
+            try
             {
-                List<LogEntry> currentLogs;
-                try
+                while (!_cts.Token.IsCancellationRequested)
                 {
-                    currentLogs = reader.ReadLogs().ToList();
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
-                    Thread.Sleep(5000);
-                    continue;
-                }
+                    List<LogEntry> currentLogs;
+                    try
+                    {
+                        currentLogs = reader.ReadLogs().ToList();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
+                        Thread.Sleep(5000);
+                        continue;
+                    }
 
-                var newLogs = currentLogs.Except(_lastProcessedLogs).ToList();
+                    var newLogs = currentLogs;
+                    if (newLogs.Any())
+                    {
+                        LogsChanged?.Invoke(newLogs);
+                    }
 
-                if (newLogs.Any())
-                {
-                    LogsChanged?.Invoke(newLogs);
-                    _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
-                }
+                    if (newLogs.Any())
+                    {
+                        LogsChanged?.Invoke(newLogs);
+                        _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
+                    }
 
-                try
-                {
-                    bool cancelled = _cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(1));
-                    if (cancelled || _cts.Token.IsCancellationRequested) break;
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
+                    try
+                    {
+                        bool cancelled = _cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+                        if (cancelled || _cts.Token.IsCancellationRequested) break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             }
-        }
-        finally
-        {
-            _isMonitoring = false;
-            MonitoringStopped?.Invoke();
-            _cts?.Dispose();
-            _cts = null;
-        }
+            finally
+            {
+                _isMonitoring = false;
+                MonitoringStopped?.Invoke();
+                _cts?.Dispose();
+                _cts = null;
+            }
+        });
     }
 
     public void StopMonitoring()

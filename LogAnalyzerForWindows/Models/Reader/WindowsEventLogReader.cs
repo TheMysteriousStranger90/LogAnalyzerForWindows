@@ -8,6 +8,7 @@ namespace LogAnalyzerForWindows.Models.Reader;
 public class WindowsEventLogReader : ILogReader
 {
     private readonly string _logName;
+    private DateTime? _lastReadTime = null;
 
     public WindowsEventLogReader(string logName)
     {
@@ -18,14 +19,14 @@ public class WindowsEventLogReader : ILogReader
 
         _logName = logName;
     }
-    
+
     private string MapEventTypeToLevelString(object eventTypeObj)
     {
         if (eventTypeObj == null)
             return "Unknown";
 
         string eventTypeStr = eventTypeObj.ToString();
-        
+
         switch (eventTypeStr)
         {
             case "Ошибка":
@@ -54,12 +55,20 @@ public class WindowsEventLogReader : ILogReader
 
         return "Other";
     }
-
+    
     public IEnumerable<LogEntry> ReadLogs()
     {
         var logs = new List<LogEntry>();
 
-        string query = $"SELECT TimeGenerated, Type, Message FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'";
+        string timeFilter = "";
+        if (_lastReadTime.HasValue)
+        {
+            string wmiTime = _lastReadTime.Value.ToUniversalTime().ToString("yyyyMMddHHmmss.000000+000");
+            timeFilter = $" AND TimeGenerated > '{wmiTime}'";
+        }
+
+        string query =
+            $"SELECT TimeGenerated, Type, Message FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'{timeFilter}";
 
         try
         {
@@ -77,10 +86,8 @@ public class WindowsEventLogReader : ILogReader
                             {
                                 timestamp = ManagementDateTimeConverter.ToDateTime(timeGeneratedValue.ToString());
                             }
-                            catch (FormatException ex)
+                            catch
                             {
-                                System.Diagnostics.Debug.WriteLine(
-                                    $"Failed to parse TimeGenerated '{timeGeneratedValue}': {ex.Message}");
                                 timestamp = DateTime.MinValue;
                             }
                         }
@@ -90,7 +97,6 @@ public class WindowsEventLogReader : ILogReader
                         }
 
                         string textualLevel = MapEventTypeToLevelString(mo["Type"]);
-                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Read log: {timestamp}, {textualLevel}, {mo["Message"]}");
 
                         var logEntry = new LogEntry
                         {
@@ -99,6 +105,9 @@ public class WindowsEventLogReader : ILogReader
                             Message = mo["Message"]?.ToString()
                         };
                         logs.Add(logEntry);
+                        
+                        if (timestamp.HasValue && (!_lastReadTime.HasValue || timestamp > _lastReadTime))
+                            _lastReadTime = timestamp;
                     }
                 }
             }
@@ -107,6 +116,7 @@ public class WindowsEventLogReader : ILogReader
         {
             System.Diagnostics.Debug.WriteLine($"WMI Query failed for log '{_logName}': {ex.Message}");
         }
+
         return logs;
     }
 }

@@ -237,89 +237,73 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
     private bool CanStopMonitoring() => _monitor.IsMonitoring;
 
-    private void StartMonitoring()
+private void StartMonitoring()
+{
+    if (!CanStartMonitoring()) return;
+
+    IsLoading = true;
+    TextBlock = "Starting monitoring...";
+    OutputText = string.Empty;
+    _processedLogs.Clear();
+    UpdateCanSaveState();
+
+    ILogReader reader = new WindowsEventLogReader("System");
+    LogAnalyzer generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
+    ILogFormatter formatter = new LogFormatter();
+    ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputTextOnUiThread);
+
+    LogManager manager = new LogManager(reader, generalAnalyzer, formatter, writer);
+
+    TimeSpan timeSpan;
+    switch (SelectedTime)
     {
-        if (!CanStartMonitoring()) return;
+        case "Last hour":
+            timeSpan = TimeSpan.FromHours(1);
+            break;
+        case "Last 24 hours":
+            timeSpan = TimeSpan.FromDays(1);
+            break;
+        case "Last 3 days":
+            timeSpan = TimeSpan.FromDays(3);
+            break;
+        default:
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                TextBlock = $"Error: Unknown time interval '{SelectedTime}'.";
+                IsLoading = false;
+                OnMonitoringStateChanged();
+            });
+            return;
+    }
 
-        IsLoading = true;
-        TextBlock = "Starting monitoring...";
-        OutputText = string.Empty;
-        _processedLogs.Clear();
-        UpdateCanSaveState();
+    TimeFilter timeFilter = new TimeFilter(timeSpan);
 
-        Task.Run(() =>
+    _onLogsChangedHandler = (incomingLogs) =>
+    {
+        var relevantLogs = timeFilter.Filter(incomingLogs);
+
+        var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
+
+        var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
+            .Where(log => _processedLogs.Add(log))
+            .ToList();
+
+        Dispatcher.UIThread.InvokeAsync(() =>
         {
-            ILogReader reader = new WindowsEventLogReader("System");
-            LogAnalyzer generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
-            ILogFormatter formatter = new LogFormatter();
-            ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputTextOnUiThread);
+            UpdateCanSaveState();
 
-            LogManager manager = new LogManager(reader, generalAnalyzer, formatter, writer);
-
-            TimeSpan timeSpan;
-            switch (SelectedTime)
+            if (newUniqueLevelLogs.Any())
             {
-                case "Last hour":
-                    timeSpan = TimeSpan.FromHours(1);
-                    break;
-                case "Last 24 hours":
-                    timeSpan = TimeSpan.FromDays(1);
-                    break;
-                case "Last 3 days":
-                    timeSpan = TimeSpan.FromDays(3);
-                    break;
-                default:
-                    Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        TextBlock = $"Error: Unknown time interval '{SelectedTime}'.";
-                        IsLoading = false;
-                        OnMonitoringStateChanged();
-                    });
-                    return;
-            }
-
-            TimeFilter timeFilter = new TimeFilter(timeSpan);
-
-            _onLogsChangedHandler = (incomingLogs) =>
-            {
-                var relevantLogs = timeFilter.Filter(incomingLogs);
-
-                var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
-
-                var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
-                    .Where(log => _processedLogs.Add(log))
-                    .ToList();
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    UpdateCanSaveState();
-
-                    if (newUniqueLevelLogs.Any())
-                    {
-                        manager.ProcessLogs(newUniqueLevelLogs);
-                        TextBlock =
-                            $"Monitoring... Unique '{SelectedLogLevel}' logs found: {_processedLogs.Count(l => l.Level?.Equals(SelectedLogLevel, StringComparison.OrdinalIgnoreCase) ?? false)}";
-                    }
-                });
-            };
-
-            _monitor.LogsChanged += _onLogsChangedHandler;
-            _monitor.Monitor(reader);
-        }).ContinueWith(task =>
-        {
-            if (task.IsFaulted)
-            {
-                Debug.WriteLine($"Monitoring task faulted: {task.Exception?.GetBaseException().Message}");
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"Error during monitoring: {task.Exception?.GetBaseException().Message}";
-                    IsLoading = false;
-                    if (_monitor.IsMonitoring) _monitor.StopMonitoring();
-                    else OnMonitoringStateChanged();
-                });
+                manager.ProcessLogs(newUniqueLevelLogs);
+                TextBlock =
+                    $"Monitoring... Unique '{SelectedLogLevel}' logs found: {_processedLogs.Count(l => l.Level?.Equals(SelectedLogLevel, StringComparison.OrdinalIgnoreCase) ?? false)}";
             }
         });
-    }
+    };
+
+    _monitor.LogsChanged += _onLogsChangedHandler;
+    _monitor.Monitor(reader);
+}
 
     private void StopMonitoring()
     {
