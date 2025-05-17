@@ -47,7 +47,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
         { "Information", "Warning", "Error", "AuditSuccess", "AuditFailure" };
-    
+
     public AvaloniaList<string> Times { get; } =
         new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
 
@@ -66,10 +66,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
     public string OutputText
     {
         get => _outputText;
-        set
-        {
-            SetProperty(ref _outputText, value);
-        }
+        set { SetProperty(ref _outputText, value); }
     }
 
     public string SelectedLogLevel
@@ -324,18 +321,26 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
         });
     }
 
-
     private void StopMonitoring()
     {
-        if (!CanStopMonitoring()) return;
-
         TextBlock = "Stopping monitoring...";
-        _monitor.StopMonitoring();
 
-        if (_onLogsChangedHandler != null)
+        try
         {
-            _monitor.LogsChanged -= _onLogsChangedHandler;
-            _onLogsChangedHandler = null;
+            if (_monitor?.IsMonitoring == true)
+            {
+                _monitor.StopMonitoring();
+            }
+
+            if (_onLogsChangedHandler != null && _monitor != null)
+            {
+                _monitor.LogsChanged -= _onLogsChangedHandler;
+                _onLogsChangedHandler = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error stopping monitoring: {ex.Message}");
         }
     }
 
@@ -367,6 +372,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
                     {
                         return formatter.Format(log).Message;
                     }
+
                     return formatter.Format(log).ToString();
                 });
 
@@ -447,7 +453,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
             if (smtpEx.InnerException is SocketException)
             {
-                userMessage = "Error sending email: Network connection issue or email server unavailable. Please check your internet connection and server status.";
+                userMessage =
+                    "Error sending email: Network connection issue or email server unavailable. Please check your internet connection and server status.";
             }
             else
             {
@@ -457,20 +464,24 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
                         userMessage = "Error sending email: Recipient mailbox unavailable or does not exist.";
                         break;
                     case SmtpStatusCode.ServiceNotAvailable:
-                        userMessage = "Error sending email: Email service is temporarily unavailable. Please try again later.";
+                        userMessage =
+                            "Error sending email: Email service is temporarily unavailable. Please try again later.";
                         break;
                     case SmtpStatusCode.ClientNotPermitted:
                     case SmtpStatusCode.TransactionFailed:
-                        userMessage = "Error sending email: Authentication failed or transaction rejected by the email server. Please check your email credentials and server policy.";
+                        userMessage =
+                            "Error sending email: Authentication failed or transaction rejected by the email server. Please check your email credentials and server policy.";
                         break;
                     case SmtpStatusCode.MustIssueStartTlsFirst:
-                         userMessage = "Error sending email: Secure connection (TLS) required by the server was not established.";
-                         break;
+                        userMessage =
+                            "Error sending email: Secure connection (TLS) required by the server was not established.";
+                        break;
                     default:
                         // The default userMessage (smtpEx.Message) will be used if no specific case matches.
-                        break; 
+                        break;
                 }
             }
+
             TextBlock = userMessage;
         }
         catch (IOException fileEx)
@@ -554,21 +565,30 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
         {
             if (disposing)
             {
-                _monitor.MonitoringStarted -= OnMonitoringStateChanged;
-                _monitor.MonitoringStopped -= OnMonitoringStateChanged;
-                if (_onLogsChangedHandler != null)
+                try
                 {
-                    _monitor.LogsChanged -= _onLogsChangedHandler;
+                    if (_monitor?.IsMonitoring == true)
+                    {
+                        StopMonitoring();
+                    }
+
+                    _monitor.MonitoringStarted -= OnMonitoringStateChanged;
+                    _monitor.MonitoringStopped -= OnMonitoringStateChanged;
+
+                    if (_folderWatcher != null)
+                    {
+                        _folderWatcher.Created -= OnLogDirectoryChanged;
+                        _folderWatcher.Deleted -= OnLogDirectoryChanged;
+                        _folderWatcher.Renamed -= OnLogDirectoryChanged;
+                        _folderWatcher.Changed -= OnLogDirectoryChanged;
+                        _folderWatcher.EnableRaisingEvents = false;
+                        _folderWatcher.Dispose();
+                    }
                 }
-
-                _monitor.StopMonitoring();
-
-                _folderWatcher.Created -= OnLogDirectoryChanged;
-                _folderWatcher.Deleted -= OnLogDirectoryChanged;
-                _folderWatcher.Renamed -= OnLogDirectoryChanged;
-                _folderWatcher.Changed -= OnLogDirectoryChanged;
-                _folderWatcher.EnableRaisingEvents = false;
-                _folderWatcher.Dispose();
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error during Dispose: {ex.Message}");
+                }
             }
 
             _disposedValue = true;
