@@ -63,7 +63,7 @@ public class EmailService : IEmailService
         if (_emailSender == null)
         {
             Debug.WriteLine("EmailSender is not initialized. Cannot send email. Check .env configuration.");
-            return;
+            throw new InvalidOperationException("Email service is not configured. Please check application settings.");
         }
 
         try
@@ -73,7 +73,7 @@ public class EmailService : IEmailService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"An error occurred while sending email: {ex.Message}");
+            Debug.WriteLine($"An error occurred within EmailSender: {ex.Message}");
             throw;
         }
     }

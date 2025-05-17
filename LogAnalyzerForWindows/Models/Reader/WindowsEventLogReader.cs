@@ -18,6 +18,31 @@ public class WindowsEventLogReader : ILogReader
 
         _logName = logName;
     }
+    
+    private string MapEventTypeToLevelString(object eventTypeObj)
+    {
+        if (eventTypeObj == null)
+        {
+            return "Unknown"; 
+        }
+
+        string eventTypeStr = eventTypeObj.ToString();
+        if (!ushort.TryParse(eventTypeStr, out ushort eventTypeNumeric))
+        {
+            return "Unknown";
+        }
+
+        switch (eventTypeNumeric)
+        {
+            case 1: return "Error";
+            case 2: return "Warning";
+            case 4: return "Information";
+            case 8: return "AuditSuccess";
+            case 16: return "AuditFailure";
+            default:
+                return "Other";
+        }
+    }
 
     public IEnumerable<LogEntry> ReadLogs()
     {
@@ -53,15 +78,12 @@ public class WindowsEventLogReader : ILogReader
                             timestamp = DateTime.MinValue;
                         }
 
+                        string textualLevel = MapEventTypeToLevelString(mo["Type"]);
 
                         var logEntry = new LogEntry
                         {
                             Timestamp = timestamp,
-                            // Type is actually an EventType (e.g., 1 for Error, 2 for Warning, 4 for Information)
-                            // This needs mapping to string Level if that's the expectation.
-                            // For now, using the raw 'Type' property which might be a number.
-                            Level = mo["Type"]
-                                ?.ToString(), // This will be the numeric type. Map to "Error", "Warning" etc. if needed.
+                            Level = textualLevel,
                             Message = mo["Message"]?.ToString()
                         };
                         logs.Add(logEntry);
@@ -73,7 +95,6 @@ public class WindowsEventLogReader : ILogReader
         {
             System.Diagnostics.Debug.WriteLine($"WMI Query failed for log '{_logName}': {ex.Message}");
         }
-
         return logs;
     }
 }

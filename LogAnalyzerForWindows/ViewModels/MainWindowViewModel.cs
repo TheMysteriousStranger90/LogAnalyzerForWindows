@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Mail;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -44,10 +46,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
     private readonly HashSet<LogEntry> _processedLogs = new HashSet<LogEntry>();
 
     public AvaloniaList<string> LogLevels { get; } = new AvaloniaList<string>
-        { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
-
-    public static Dictionary<string, string> LogLevelTranslations { get; private set; }
-
+        { "Information", "Warning", "Error", "AuditSuccess", "AuditFailure" };
+    
     public AvaloniaList<string> Times { get; } =
         new AvaloniaList<string> { "Last hour", "Last 24 hours", "Last 3 days" };
 
@@ -186,10 +186,6 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
 
     public MainWindowViewModel()
     {
-        LogLevelTranslations = CultureInfo.CurrentUICulture.Name.StartsWith("ru", StringComparison.OrdinalIgnoreCase)
-            ? LogLevelTranslationsHelper.LogLevelTranslationsRussian
-            : LogLevelTranslationsHelper.LogLevelTranslationsEnglish;
-
         _emailService = new EmailService();
         _fileSystemService = new FileSystemService();
 
@@ -290,11 +286,8 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
             _onLogsChangedHandler = (incomingLogs) =>
             {
                 var relevantLogs = timeFilter.Filter(incomingLogs);
-                var levelAnalyzer = new LevelLogAnalyzer(
-                    LogLevelTranslations.TryGetValue(SelectedLogLevel, out var translatedLevel)
-                        ? translatedLevel
-                        : SelectedLogLevel
-                );
+
+                var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
 
                 var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
                     .Where(log => _processedLogs.Add(log))
@@ -425,6 +418,7 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
             if (!zipFiles.Any())
             {
                 TextBlock = "No archive files found to send.";
+                IsLoading = false;
                 return;
             }
 
@@ -434,10 +428,60 @@ public sealed class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged,
                 $"Please find the latest log archive attached ({Path.GetFileName(latestZipFile)}).", latestZipFile);
             TextBlock = "Email sent successfully.";
         }
+        catch (InvalidOperationException ioEx)
+        {
+            Debug.WriteLine($"Operation error sending email: {ioEx.Message}");
+            if (ioEx.Message.Contains("Email service is not configured"))
+            {
+                TextBlock = "Error sending email: Email service is not configured. Please check settings.";
+            }
+            else
+            {
+                TextBlock = $"Error sending email: An operation error occurred ({ioEx.Message})";
+            }
+        }
+        catch (SmtpException smtpEx)
+        {
+            Debug.WriteLine($"SMTP error sending email: {smtpEx.StatusCode} - {smtpEx.Message}");
+            string userMessage = $"SMTP Error: {smtpEx.Message}";
+
+            if (smtpEx.InnerException is SocketException)
+            {
+                userMessage = "Error sending email: Network connection issue or email server unavailable. Please check your internet connection and server status.";
+            }
+            else
+            {
+                switch (smtpEx.StatusCode)
+                {
+                    case SmtpStatusCode.MailboxUnavailable:
+                        userMessage = "Error sending email: Recipient mailbox unavailable or does not exist.";
+                        break;
+                    case SmtpStatusCode.ServiceNotAvailable:
+                        userMessage = "Error sending email: Email service is temporarily unavailable. Please try again later.";
+                        break;
+                    case SmtpStatusCode.ClientNotPermitted:
+                    case SmtpStatusCode.TransactionFailed:
+                        userMessage = "Error sending email: Authentication failed or transaction rejected by the email server. Please check your email credentials and server policy.";
+                        break;
+                    case SmtpStatusCode.MustIssueStartTlsFirst:
+                         userMessage = "Error sending email: Secure connection (TLS) required by the server was not established.";
+                         break;
+                    default:
+                        // The default userMessage (smtpEx.Message) will be used if no specific case matches.
+                        break; 
+                }
+            }
+            TextBlock = userMessage;
+        }
+        catch (IOException fileEx)
+        {
+            Debug.WriteLine($"File error during email preparation: {fileEx.Message}");
+            TextBlock = $"Error preparing email attachment: {fileEx.Message}";
+        }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error sending email: {ex.Message}");
-            TextBlock = $"Error sending email: {ex.Message}";
+            Debug.WriteLine($"Generic error sending email: {ex.Message}");
+            TextBlock = $"An unexpected error occurred while sending email: {ex.Message}";
         }
         finally
         {
