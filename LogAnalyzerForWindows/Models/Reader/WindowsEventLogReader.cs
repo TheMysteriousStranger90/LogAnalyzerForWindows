@@ -22,26 +22,37 @@ public class WindowsEventLogReader : ILogReader
     private string MapEventTypeToLevelString(object eventTypeObj)
     {
         if (eventTypeObj == null)
-        {
-            return "Unknown"; 
-        }
+            return "Unknown";
 
         string eventTypeStr = eventTypeObj.ToString();
-        if (!ushort.TryParse(eventTypeStr, out ushort eventTypeNumeric))
+        
+        switch (eventTypeStr)
         {
-            return "Unknown";
+            case "Ошибка":
+                return "Error";
+            case "Предупреждение":
+                return "Warning";
+            case "Информация":
+                return "Information";
+            case "Успешный аудит":
+                return "AuditSuccess";
+            case "Ошибка аудита":
+                return "AuditFailure";
         }
 
-        switch (eventTypeNumeric)
+        if (ushort.TryParse(eventTypeStr, out ushort eventTypeNumeric))
         {
-            case 1: return "Error";
-            case 2: return "Warning";
-            case 4: return "Information";
-            case 8: return "AuditSuccess";
-            case 16: return "AuditFailure";
-            default:
-                return "Other";
+            switch (eventTypeNumeric)
+            {
+                case 1: return "Error";
+                case 2: return "Warning";
+                case 4: return "Information";
+                case 8: return "AuditSuccess";
+                case 16: return "AuditFailure";
+            }
         }
+
+        return "Other";
     }
 
     public IEnumerable<LogEntry> ReadLogs()
@@ -79,6 +90,7 @@ public class WindowsEventLogReader : ILogReader
                         }
 
                         string textualLevel = MapEventTypeToLevelString(mo["Type"]);
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Read log: {timestamp}, {textualLevel}, {mo["Message"]}");
 
                         var logEntry = new LogEntry
                         {
