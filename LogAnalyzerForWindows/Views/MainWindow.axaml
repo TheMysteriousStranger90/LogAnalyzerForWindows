@@ -19,11 +19,6 @@
     </Window.Styles>
     
     <Grid RowDefinitions="Auto, *, Auto, Auto">
-        
-        <ProgressBar Grid.Row="0" 
-                     IsIndeterminate="True" IsVisible="{Binding IsLoading}" 
-                     Height="5" VerticalAlignment="Top"/>
-
         <Grid Grid.Row="1" ColumnDefinitions="Auto, *">
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="5,20,5,0">
                 <StackPanel Margin="10" Spacing="10" MinWidth="250">
