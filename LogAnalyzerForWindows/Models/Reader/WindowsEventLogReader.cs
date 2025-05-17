@@ -8,6 +8,7 @@ namespace LogAnalyzerForWindows.Models.Reader;
 public class WindowsEventLogReader : ILogReader
 {
     private readonly string _logName;
+    private DateTime? _lastReadTime = null;
 
     public WindowsEventLogReader(string logName)
     {
@@ -19,11 +20,67 @@ public class WindowsEventLogReader : ILogReader
         _logName = logName;
     }
 
+    private string MapEventTypeToLevelString(object eventTypeObj)
+    {
+        if (eventTypeObj == null)
+            return "Unknown";
+
+        string eventTypeStr = eventTypeObj.ToString();
+
+        switch (eventTypeStr)
+        {
+            // Russian
+            case "Ошибка":
+                return "Error";
+            case "Предупреждение":
+                return "Warning";
+            case "Информация":
+                return "Information";
+            case "Успешный аудит":
+                return "AuditSuccess";
+            case "Ошибка аудита":
+                return "AuditFailure";
+            // English
+            case "Error":
+                return "Error";
+            case "Warning":
+                return "Warning";
+            case "Information":
+                return "Information";
+            case "Audit Success":
+                return "AuditSuccess";
+            case "Audit Failure":
+                return "AuditFailure";
+        }
+
+        if (ushort.TryParse(eventTypeStr, out ushort eventTypeNumeric))
+        {
+            switch (eventTypeNumeric)
+            {
+                case 1: return "Error";
+                case 2: return "Warning";
+                case 4: return "Information";
+                case 8: return "AuditSuccess";
+                case 16: return "AuditFailure";
+            }
+        }
+
+        return "Other";
+    }
+    
     public IEnumerable<LogEntry> ReadLogs()
     {
         var logs = new List<LogEntry>();
 
-        string query = $"SELECT TimeGenerated, Type, Message FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'";
+        string timeFilter = "";
+        if (_lastReadTime.HasValue)
+        {
+            string wmiTime = _lastReadTime.Value.ToUniversalTime().ToString("yyyyMMddHHmmss.000000+000");
+            timeFilter = $" AND TimeGenerated > '{wmiTime}'";
+        }
+
+        string query =
+            $"SELECT TimeGenerated, Type, Message FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'{timeFilter}";
 
         try
         {
@@ -41,10 +98,8 @@ public class WindowsEventLogReader : ILogReader
                             {
                                 timestamp = ManagementDateTimeConverter.ToDateTime(timeGeneratedValue.ToString());
                             }
-                            catch (FormatException ex)
+                            catch
                             {
-                                System.Diagnostics.Debug.WriteLine(
-                                    $"Failed to parse TimeGenerated '{timeGeneratedValue}': {ex.Message}");
                                 timestamp = DateTime.MinValue;
                             }
                         }
@@ -53,18 +108,18 @@ public class WindowsEventLogReader : ILogReader
                             timestamp = DateTime.MinValue;
                         }
 
+                        string textualLevel = MapEventTypeToLevelString(mo["Type"]);
 
                         var logEntry = new LogEntry
                         {
                             Timestamp = timestamp,
-                            // Type is actually an EventType (e.g., 1 for Error, 2 for Warning, 4 for Information)
-                            // This needs mapping to string Level if that's the expectation.
-                            // For now, using the raw 'Type' property which might be a number.
-                            Level = mo["Type"]
-                                ?.ToString(), // This will be the numeric type. Map to "Error", "Warning" etc. if needed.
+                            Level = textualLevel,
                             Message = mo["Message"]?.ToString()
                         };
                         logs.Add(logEntry);
+                        
+                        if (timestamp.HasValue && (!_lastReadTime.HasValue || timestamp > _lastReadTime))
+                            _lastReadTime = timestamp;
                     }
                 }
             }
