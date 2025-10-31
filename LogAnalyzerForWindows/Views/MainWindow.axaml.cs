@@ -6,7 +6,7 @@ namespace LogAnalyzerForWindows.Views;
 
 internal sealed partial class MainWindow : Window, IDisposable
 {
-    private MainWindowViewModel _viewModel;
+    private readonly MainWindowViewModel _viewModel;
     private bool _disposedValue;
 
     public MainWindow()
