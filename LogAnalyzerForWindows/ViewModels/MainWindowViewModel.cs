@@ -8,6 +8,8 @@ using System.Windows.Input;
 using Avalonia.Collections;
 using Avalonia.Threading;
 using LogAnalyzerForWindows.Commands;
+using LogAnalyzerForWindows.Database;
+using LogAnalyzerForWindows.Database.Repositories;
 using LogAnalyzerForWindows.Filter;
 using LogAnalyzerForWindows.Formatter;
 using LogAnalyzerForWindows.Formatter.Interfaces;
@@ -191,6 +193,39 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private readonly LogRepository _logRepository;
+    private string _currentSessionId = string.Empty;
+    private PaginationViewModel? _paginationViewModel;
+    private bool _useDatabaseMode;
+
+    public PaginationViewModel? PaginationViewModel
+    {
+        get => _paginationViewModel;
+        private set => SetProperty(ref _paginationViewModel, value);
+    }
+
+    public bool UseDatabaseMode
+    {
+        get => _useDatabaseMode;
+        set
+        {
+            if (SetProperty(ref _useDatabaseMode, value))
+            {
+                if (value)
+                {
+                    InitializeDatabaseMode();
+                }
+                else
+                {
+                    PaginationViewModel = null;
+                }
+            }
+        }
+    }
+
+    public ICommand ViewHistoryCommand { get; }
+    public ICommand ClearHistoryCommand { get; }
+
     public MainWindowViewModel()
     {
         _emailService = new EmailService();
@@ -241,6 +276,38 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         OnPropertyChanged(nameof(IsFolderExists));
         UpdateCanSaveState();
+
+        _logRepository = new LogRepository();
+
+        ViewHistoryCommand = new RelayCommand(async () => await ViewHistoryAsync().ConfigureAwait(false));
+        ClearHistoryCommand = new RelayCommand(async () => await ClearOldHistoryAsync().ConfigureAwait(false),
+            () => UseDatabaseMode);
+
+        InitializeDatabaseAsync();
+    }
+
+    private static async void InitializeDatabaseAsync()
+    {
+        try
+        {
+            using var context = new LogAnalyzerDbContext();
+            await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+            Debug.WriteLine("Database initialized successfully");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Database initialization error: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error during database initialization: {ex.Message}");
+        }
+    }
+
+    private void InitializeDatabaseMode()
+    {
+        PaginationViewModel = new PaginationViewModel(_logRepository);
+        _ = PaginationViewModel.LoadLogsAsync();
     }
 
     private void UpdateCanSaveState()
@@ -249,7 +316,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         (SaveCommand as RelayCommand)?.OnCanExecuteChanged();
     }
 
-       private bool CanStartMonitoring() =>
+    private bool CanStartMonitoring() =>
         !string.IsNullOrEmpty(SelectedLogLevel) &&
         !string.IsNullOrEmpty(SelectedTime) &&
         !_monitor.IsMonitoring;
@@ -266,6 +333,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         OutputText = string.Empty;
         _processedLogs.Clear();
         UpdateCanSaveState();
+
+        _currentSessionId = $"Session_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
 
         ILogReader reader = new WindowsEventLogReader("System");
         var generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
@@ -295,7 +364,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         var timeFilter = new TimeFilter(timeSpan);
 
-        _onLogsChangedHandler = (sender, args) =>
+        _onLogsChangedHandler = async (sender, args) =>
         {
             var incomingLogs = args.Logs;
             var relevantLogs = timeFilter.Filter(incomingLogs);
@@ -305,22 +374,103 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 .Where(_processedLogs.Add)
                 .ToList();
 
-            Dispatcher.UIThread.InvokeAsync(() =>
+            if (newUniqueLevelLogs.Count > 0)
             {
-                UpdateCanSaveState();
-
-                if (newUniqueLevelLogs.Count != 0)
+                try
                 {
+                    await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
+                    Debug.WriteLine($"Saved {newUniqueLevelLogs.Count} logs to database");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Debug.WriteLine($"Error saving logs to database: {ex.Message}");
+                }
+                catch (IOException ex)
+                {
+                    Debug.WriteLine($"IO error saving logs to database: {ex.Message}");
+                }
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    UpdateCanSaveState();
                     manager.ProcessLogs(newUniqueLevelLogs);
                     var matchingCount = _processedLogs.Count(l =>
                         string.Equals(l.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
-                    TextBlock = $"Monitoring... Unique '{SelectedLogLevel}' logs found: {matchingCount}";
-                }
-            });
+                    TextBlock =
+                        $"Monitoring... Unique '{SelectedLogLevel}' logs found: {matchingCount} (Session: {_currentSessionId})";
+                });
+            }
         };
 
         _monitor.LogsChanged += _onLogsChangedHandler;
         _monitor.Monitor(reader);
+    }
+
+    private async Task ViewHistoryAsync()
+    {
+        UseDatabaseMode = true;
+        TextBlock = "Loading history from database...";
+
+        try
+        {
+            var sessions = await _logRepository.GetSessionIdsAsync().ConfigureAwait(false);
+
+            if (sessions.Count == 0)
+            {
+                TextBlock = "No history found in database.";
+                return;
+            }
+
+            var stats = await _logRepository.GetLogStatisticsAsync().ConfigureAwait(false);
+            var statsText = string.Join(", ", stats.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+
+            TextBlock = $"History loaded. Total sessions: {sessions.Count}. Statistics: {statsText}";
+
+            await PaginationViewModel!.LoadLogsAsync().ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Error loading history: {ex.Message}");
+            TextBlock = $"Error loading history: {ex.Message}";
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error loading history: {ex.Message}");
+            TextBlock = $"IO error loading history: {ex.Message}";
+        }
+    }
+
+    private async Task ClearOldHistoryAsync()
+    {
+        TextBlock = "Clearing old history...";
+        IsLoading = true;
+
+        try
+        {
+            var cutoffDate = DateTime.UtcNow.AddDays(-30);
+            var deletedCount = await _logRepository.DeleteOldLogsAsync(cutoffDate).ConfigureAwait(false);
+
+            TextBlock = $"Deleted {deletedCount} old log entries (older than 30 days).";
+
+            if (UseDatabaseMode && PaginationViewModel != null)
+            {
+                await PaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Error clearing history: {ex.Message}");
+            TextBlock = $"Error clearing history: {ex.Message}";
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error clearing history: {ex.Message}");
+            TextBlock = $"IO error clearing history: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     private void StopMonitoring()
