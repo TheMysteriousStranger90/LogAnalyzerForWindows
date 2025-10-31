@@ -31,7 +31,7 @@
 
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 
-        <WarningsNotAsErrors>CA1515;CA2007;CA1416;CA1812</WarningsNotAsErrors>
+        <WarningsNotAsErrors>CA1416;CA1812</WarningsNotAsErrors>
     </PropertyGroup>
 
     <ItemGroup>

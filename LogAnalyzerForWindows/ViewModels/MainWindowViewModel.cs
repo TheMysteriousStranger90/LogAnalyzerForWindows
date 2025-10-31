@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net.Mail;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.Versioning;
 using System.Windows.Input;
 using Avalonia.Collections;
 using Avalonia.Threading;
@@ -248,13 +249,14 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         (SaveCommand as RelayCommand)?.OnCanExecuteChanged();
     }
 
-    private bool CanStartMonitoring() =>
+       private bool CanStartMonitoring() =>
         !string.IsNullOrEmpty(SelectedLogLevel) &&
         !string.IsNullOrEmpty(SelectedTime) &&
         !_monitor.IsMonitoring;
 
     private bool CanStopMonitoring() => _monitor.IsMonitoring;
 
+    [SupportedOSPlatform("windows")]
     private void StartMonitoring()
     {
         if (!CanStartMonitoring()) return;
@@ -293,7 +295,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         var timeFilter = new TimeFilter(timeSpan);
 
-        // Виправлено: правильний EventHandler
         _onLogsChangedHandler = (sender, args) =>
         {
             var incomingLogs = args.Logs;

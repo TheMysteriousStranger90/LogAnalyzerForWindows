@@ -53,7 +53,7 @@ internal sealed class EmailSender
         {
             try
             {
-                await builder.Attachments.AddAsync(attachmentPath);
+                await builder.Attachments.AddAsync(attachmentPath).ConfigureAwait(false);
             }
             catch (IOException ex)
             {
