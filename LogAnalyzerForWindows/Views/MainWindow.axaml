@@ -23,9 +23,6 @@
         <!-- Toolbar -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="10,5">
             <ToggleButton Content="Database Mode" IsChecked="{Binding UseDatabaseMode}" />
-            <Button Content="View History" Command="{Binding ViewHistoryCommand}">
-                <ToolTip.Tip>View logs from database</ToolTip.Tip>
-            </Button>
             <Button Content="Clear Old History" Command="{Binding ClearHistoryCommand}">
                 <ToolTip.Tip>Delete logs older than 30 days</ToolTip.Tip>
             </Button>
