@@ -1,17 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using LogAnalyzerForWindows.Filter.Interfaces;
+﻿using LogAnalyzerForWindows.Filter.Interfaces;
 using LogAnalyzerForWindows.Models;
 
 namespace LogAnalyzerForWindows.Filter;
 
-public class TimeFilter
+internal sealed class TimeFilter
 {
     private readonly TimeSpan _timeSpan;
     private readonly ITimeProvider _timeProvider;
 
-    public TimeFilter(TimeSpan timeSpan, ITimeProvider timeProvider = null)
+    public TimeFilter(TimeSpan timeSpan, ITimeProvider? timeProvider = null)
     {
         _timeSpan = timeSpan;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
@@ -19,7 +16,7 @@ public class TimeFilter
 
     public IEnumerable<LogEntry> Filter(IEnumerable<LogEntry> logs)
     {
-        if (logs == null) throw new ArgumentNullException(nameof(logs));
+        ArgumentNullException.ThrowIfNull(logs);
 
         var cutoff = _timeProvider.GetCurrentTime() - _timeSpan;
         return logs.Where(log => log.Timestamp.HasValue && log.Timestamp.Value >= cutoff);

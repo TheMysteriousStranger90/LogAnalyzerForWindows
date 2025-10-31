@@ -1,33 +1,33 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using LogAnalyzerForWindows.Interfaces;
+﻿using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 
 namespace LogAnalyzerForWindows.Models;
 
-public class LogMonitor : ILogMonitor
+internal sealed class LogMonitor : ILogMonitor, IDisposable
 {
-    private HashSet<LogEntry> _lastProcessedLogs = new HashSet<LogEntry>();
-    public event Action<IEnumerable<LogEntry>> LogsChanged;
-    public event Action MonitoringStarted;
-    public event Action MonitoringStopped;
-    private CancellationTokenSource _cts;
+    private HashSet<LogEntry> _lastProcessedLogs = [];
+
+    public event EventHandler<LogsChangedEventArgs>? LogsChanged;
+    public event EventHandler? MonitoringStarted;
+    public event EventHandler? MonitoringStopped;
+
+    private CancellationTokenSource? _cts;
     private volatile bool _isMonitoring;
+    private bool _disposedValue;
+
     public bool IsMonitoring => _isMonitoring;
 
-    public void Monitor(ILogReader reader)
+        public void Monitor(ILogReader reader)
     {
-        if (reader == null) throw new ArgumentNullException(nameof(reader));
+        ArgumentNullException.ThrowIfNull(reader);
+
         if (_isMonitoring) return;
 
-        _lastProcessedLogs = new HashSet<LogEntry>();
+        _lastProcessedLogs = [];
 
         _cts = new CancellationTokenSource();
         _isMonitoring = true;
-        MonitoringStarted?.Invoke();
+        MonitoringStarted?.Invoke(this, EventArgs.Empty);
 
         Task.Run(() =>
         {
@@ -40,7 +40,13 @@ public class LogMonitor : ILogMonitor
                     {
                         currentLogs = reader.ReadLogs().ToList();
                     }
-                    catch (Exception ex)
+                    catch (IOException ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
+                        Thread.Sleep(5000);
+                        continue;
+                    }
+                    catch (UnauthorizedAccessException ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
                         Thread.Sleep(5000);
@@ -48,14 +54,9 @@ public class LogMonitor : ILogMonitor
                     }
 
                     var newLogs = currentLogs;
-                    if (newLogs.Any())
+                    if (newLogs.Count > 0)
                     {
-                        LogsChanged?.Invoke(newLogs);
-                    }
-
-                    if (newLogs.Any())
-                    {
-                        LogsChanged?.Invoke(newLogs);
+                        LogsChanged?.Invoke(this, new LogsChangedEventArgs(newLogs));
                         _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
                     }
 
@@ -73,7 +74,7 @@ public class LogMonitor : ILogMonitor
             finally
             {
                 _isMonitoring = false;
-                MonitoringStopped?.Invoke();
+                MonitoringStopped?.Invoke(this, EventArgs.Empty);
                 _cts?.Dispose();
                 _cts = null;
             }
@@ -86,5 +87,35 @@ public class LogMonitor : ILogMonitor
         {
             _cts.Cancel();
         }
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                StopMonitoring();
+                _cts?.Dispose();
+            }
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+}
+
+
+internal sealed class LogsChangedEventArgs : EventArgs
+{
+    public IEnumerable<LogEntry> Logs { get; }
+
+    public LogsChangedEventArgs(IEnumerable<LogEntry> logs)
+    {
+        Logs = logs;
     }
 }

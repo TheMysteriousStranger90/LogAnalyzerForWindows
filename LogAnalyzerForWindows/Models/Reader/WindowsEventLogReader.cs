@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Management;
+using System.Runtime.Versioning;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 
 namespace LogAnalyzerForWindows.Models.Reader;
 
-public class WindowsEventLogReader : ILogReader
+[SupportedOSPlatform("windows")]
+internal sealed class WindowsEventLogReader : ILogReader
 {
     private readonly string _logName;
-    private DateTime? _lastReadTime = null;
+    private DateTime? _lastReadTime;
 
     public WindowsEventLogReader(string logName)
     {
@@ -20,12 +23,12 @@ public class WindowsEventLogReader : ILogReader
         _logName = logName;
     }
 
-    private string MapEventTypeToLevelString(object eventTypeObj)
+    private static string MapEventTypeToLevelString(object eventTypeObj)
     {
         if (eventTypeObj == null)
             return "Unknown";
 
-        string eventTypeStr = eventTypeObj.ToString();
+        string? eventTypeStr = eventTypeObj.ToString();
 
         switch (eventTypeStr)
         {
@@ -67,7 +70,7 @@ public class WindowsEventLogReader : ILogReader
 
         return "Other";
     }
-    
+
     public IEnumerable<LogEntry> ReadLogs()
     {
         var logs = new List<LogEntry>();
@@ -75,7 +78,7 @@ public class WindowsEventLogReader : ILogReader
         string timeFilter = "";
         if (_lastReadTime.HasValue)
         {
-            string wmiTime = _lastReadTime.Value.ToUniversalTime().ToString("yyyyMMddHHmmss.000000+000");
+            string wmiTime = _lastReadTime.Value.ToUniversalTime().ToString("yyyyMMddHHmmss.000000+000", CultureInfo.InvariantCulture);
             timeFilter = $" AND TimeGenerated > '{wmiTime}'";
         }
 
@@ -98,7 +101,7 @@ public class WindowsEventLogReader : ILogReader
                             {
                                 timestamp = ManagementDateTimeConverter.ToDateTime(timeGeneratedValue.ToString());
                             }
-                            catch
+                            catch (FormatException)
                             {
                                 timestamp = DateTime.MinValue;
                             }
@@ -117,7 +120,7 @@ public class WindowsEventLogReader : ILogReader
                             Message = mo["Message"]?.ToString()
                         };
                         logs.Add(logEntry);
-                        
+
                         if (timestamp.HasValue && (!_lastReadTime.HasValue || timestamp > _lastReadTime))
                             _lastReadTime = timestamp;
                     }
@@ -127,6 +130,10 @@ public class WindowsEventLogReader : ILogReader
         catch (ManagementException ex)
         {
             System.Diagnostics.Debug.WriteLine($"WMI Query failed for log '{_logName}': {ex.Message}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Access denied for log '{_logName}': {ex.Message}");
         }
 
         return logs;

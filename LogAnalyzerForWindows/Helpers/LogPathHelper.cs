@@ -1,9 +1,6 @@
-﻿using System;
-using System.IO;
+﻿namespace LogAnalyzerForWindows.Helpers;
 
-namespace LogAnalyzerForWindows.Helpers;
-
-public static class LogPathHelper
+internal static class LogPathHelper
 {
     public static string GetLogFilePath(string selectedFormat)
     {

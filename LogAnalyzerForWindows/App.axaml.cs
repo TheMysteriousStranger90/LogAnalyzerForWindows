@@ -6,7 +6,7 @@ using LogAnalyzerForWindows.Views;
 
 namespace LogAnalyzerForWindows;
 
-public partial class App : Application
+internal sealed class App : Application
 {
     public override void Initialize()
     {

@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Avalonia UI Framework -->
+    <PackageVersion Include="Avalonia" Version="11.3.8" />
+    <PackageVersion Include="Avalonia.Desktop" Version="11.3.8" />
+    <PackageVersion Include="Avalonia.Svg.Skia" Version="11.3.0" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.8" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.8" />
+    <PackageVersion Include="Avalonia.Diagnostics" Version="11.2.3" />
+    <PackageVersion Include="Avalonia.ReactiveUI" Version="11.3.8" />
+    <!-- Email -->
+    <PackageVersion Include="MailKit" Version="4.14.1" />
+    <PackageVersion Include="MimeKit" Version="4.14.0" />
+    <!-- Configuration -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="9.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="9.0.10" />
+    <PackageVersion Include="EPPlus" Version="8.2.1" />
+    <!-- System -->
+    <PackageVersion Include="System.Management" Version="9.0.10" />
+    <!-- Environment Variables -->
+    <PackageVersion Include="DotNetEnv" Version="3.1.1" />
+  </ItemGroup>
+</Project>

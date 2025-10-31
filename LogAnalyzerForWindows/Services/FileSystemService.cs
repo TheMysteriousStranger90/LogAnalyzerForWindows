@@ -1,97 +1,103 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
+﻿using System.Diagnostics;
 using System.IO.Compression;
-using System.Linq;
 using LogAnalyzerForWindows.Interfaces;
 
-public class FileSystemService : IFileSystemService
+namespace LogAnalyzerForWindows.Services;
+
+internal sealed class FileSystemService : IFileSystemService
 {
     public void OpenFolder(string path, Action<string> callback)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            callback?.Invoke("Error: Path cannot be null or empty.");
-            return;
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(callback);
 
         try
         {
-            if (Directory.Exists(path))
+            if (!Directory.Exists(path))
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = path,
-                    UseShellExecute = true,
-                    Verb = "open"
-                });
-                callback?.Invoke("Folder opened successfully.");
+                callback($"Folder does not exist: {path}");
+                return;
             }
-            else
+
+            var processStartInfo = new ProcessStartInfo
             {
-                callback?.Invoke($"Error: Folder does not exist at '{path}'.");
-            }
+                FileName = path,
+                UseShellExecute = true,
+                Verb = "open"
+            };
+
+            Process.Start(processStartInfo);
+            callback($"Opened folder: {path}");
         }
-        catch (Exception ex)
+        catch (UnauthorizedAccessException ex)
         {
-            Debug.WriteLine($"An error occurred while opening folder '{path}': {ex.Message}");
-            callback?.Invoke($"An error occurred: {ex.Message}");
+            callback($"Access denied opening folder: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            callback($"IO error opening folder: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            callback($"Cannot open folder: {ex.Message}");
         }
     }
 
     public void ArchiveLatestFolder(string path, Action<string> callback)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            callback?.Invoke("Error: Path cannot be null or empty.");
-            return;
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(callback);
 
         try
         {
-            if (Directory.Exists(path))
+            if (!Directory.Exists(path))
             {
-                var directoryInfo = new DirectoryInfo(path);
-                var latestDirectory = directoryInfo.GetDirectories()
-                                                   .OrderByDescending(d => d.CreationTimeUtc)
-                                                   .FirstOrDefault();
-
-                if (latestDirectory != null)
-                {
-                    string zipFileName = $"{latestDirectory.Name}.zip";
-                    string zipPath = Path.Combine(path, zipFileName);
-
-                    if (File.Exists(zipPath))
-                    {
-                        try
-                        {
-                            File.Delete(zipPath);
-                        }
-                        catch (IOException ex)
-                        {
-                            Debug.WriteLine($"Error deleting existing zip file '{zipPath}': {ex.Message}");
-                            callback?.Invoke($"Error: Could not delete existing archive '{zipFileName}'. {ex.Message}");
-                            return;
-                        }
-                    }
-
-                    ZipFile.CreateFromDirectory(latestDirectory.FullName, zipPath);
-                    callback?.Invoke($"Folder '{latestDirectory.Name}' archived successfully as '{zipFileName}'.");
-                }
-                else
-                {
-                    callback?.Invoke("No subfolders found to archive.");
-                }
+                callback("Base folder does not exist.");
+                return;
             }
-            else
+
+            var subFolders = Directory.GetDirectories(path);
+
+            if (subFolders.Length == 0)
             {
-                callback?.Invoke($"Error: Directory does not exist at '{path}'.");
+                callback("No subfolders found to archive.");
+                return;
             }
+
+            var latestFolder = subFolders
+                .Select(f => new DirectoryInfo(f))
+                .OrderByDescending(d => d.CreationTimeUtc)
+                .FirstOrDefault();
+
+            if (latestFolder is null)
+            {
+                callback("Could not determine latest folder.");
+                return;
+            }
+
+            string zipFileName = $"{latestFolder.Name}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+            string zipFilePath = Path.Combine(path, zipFileName);
+
+            if (File.Exists(zipFilePath))
+            {
+                callback($"Archive already exists: {zipFileName}");
+                return;
+            }
+
+            ZipFile.CreateFromDirectory(latestFolder.FullName, zipFilePath, CompressionLevel.Optimal, false);
+            callback($"Archive created: {zipFileName}");
         }
-        catch (Exception ex)
+        catch (UnauthorizedAccessException ex)
         {
-            Debug.WriteLine($"An error occurred during archiving in '{path}': {ex.Message}");
-            callback?.Invoke($"An error occurred during archiving: {ex.Message}");
+            callback($"Access denied during archiving: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            callback($"IO error during archiving: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            callback($"Invalid operation during archiving: {ex.Message}");
         }
     }
 }

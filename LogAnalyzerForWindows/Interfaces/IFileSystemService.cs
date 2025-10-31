@@ -1,9 +1,18 @@
-﻿using System;
+﻿namespace LogAnalyzerForWindows.Interfaces;
 
-namespace LogAnalyzerForWindows.Interfaces;
-
-public interface IFileSystemService
+internal interface IFileSystemService
 {
+    /// <summary>
+    /// Opens the specified folder in the file explorer.
+    /// </summary>
+    /// <param name="path">The path to the folder to open.</param>
+    /// <param name="callback">Callback to receive status updates.</param>
     void OpenFolder(string path, Action<string> callback);
+
+    /// <summary>
+    /// Archives the latest subfolder in the specified path.
+    /// </summary>
+    /// <param name="path">The base path containing subfolders.</param>
+    /// <param name="callback">Callback to receive status updates.</param>
     void ArchiveLatestFolder(string path, Action<string> callback);
 }

@@ -1,9 +1,8 @@
-﻿using System.Collections.Generic;
-using LogAnalyzerForWindows.Models;
+﻿using LogAnalyzerForWindows.Models;
 
 namespace LogAnalyzerForWindows.Interfaces;
 
-public interface ILogManager
+internal interface ILogManager
 {
     void ProcessLogs(IEnumerable<LogEntry> logs);
 }

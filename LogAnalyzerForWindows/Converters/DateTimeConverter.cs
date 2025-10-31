@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace LogAnalyzerForWindows.Converters;
 
-public class DateTimeConverter : JsonConverter<DateTime?>
+internal sealed class DateTimeConverter : JsonConverter<DateTime?>
 {
     public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {

@@ -1,6 +1,6 @@
 ﻿namespace LogAnalyzerForWindows.Models.Writer.Interfaces;
 
-public interface ILogWriter
+internal interface ILogWriter
 {
     void Write(LogEntry log);
 }

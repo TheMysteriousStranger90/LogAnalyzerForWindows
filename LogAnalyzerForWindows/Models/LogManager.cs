@@ -9,7 +9,7 @@ using LogAnalyzerForWindows.Models.Writer.Interfaces;
 
 namespace LogAnalyzerForWindows.Models;
 
-public class LogManager : ILogManager
+internal sealed class LogManager : ILogManager
 {
     private readonly ILogReader _reader;
     private readonly LogAnalyzer _analyzer;
@@ -35,7 +35,12 @@ public class LogManager : ILogManager
         {
             _analyzer.Analyze(logs);
         }
-        catch (Exception ex)
+        catch (ArgumentException ex)
+        {
+            Console.WriteLine($"An error occurred while analyzing logs: {ex.Message}");
+            return;
+        }
+        catch (InvalidOperationException ex)
         {
             Console.WriteLine($"An error occurred while analyzing logs: {ex.Message}");
             return;
@@ -52,7 +57,15 @@ public class LogManager : ILogManager
                 var formattedLog = _formatter.Format(log);
                 _writer.Write(formattedLog);
             }
-            catch (Exception ex)
+            catch (ArgumentException ex)
+            {
+                Console.WriteLine($"An error occurred while formatting or writing log (Timestamp: {log.Timestamp}, Level: {log.Level}): {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Console.WriteLine($"An error occurred while formatting or writing log (Timestamp: {log.Timestamp}, Level: {log.Level}): {ex.Message}");
+            }
+            catch (UnauthorizedAccessException ex)
             {
                 Console.WriteLine($"An error occurred while formatting or writing log (Timestamp: {log.Timestamp}, Level: {log.Level}): {ex.Message}");
             }

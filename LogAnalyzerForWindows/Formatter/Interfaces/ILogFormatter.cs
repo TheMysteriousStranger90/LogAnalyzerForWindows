@@ -2,7 +2,7 @@
 
 namespace LogAnalyzerForWindows.Formatter.Interfaces;
 
-public interface ILogFormatter
+internal interface ILogFormatter
 {
     LogEntry Format(LogEntry log);
 }

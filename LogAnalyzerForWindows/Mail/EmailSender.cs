@@ -1,96 +1,98 @@
-﻿using System;
-using System.Globalization;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using MailKit.Net.Smtp;
-using MailKit.Security;
+﻿using MailKit.Net.Smtp;
 using MimeKit;
 
 namespace LogAnalyzerForWindows.Mail;
 
-public class EmailSender
+internal sealed class EmailSender
 {
-    private string _smtpServer;
-    private int _smtpPort;
-    private string _fromEmail;
-    private string _fromName;
-    private string _password;
+    private readonly string _smtpServer;
+    private readonly int _smtpPort;
+    private readonly string _fromEmail;
+    private readonly string _fromName;
+    private readonly string _password;
 
     public EmailSender(string smtpServer, int smtpPort, string fromEmail, string fromName, string password)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(smtpServer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fromEmail);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        if (smtpPort <= 0 || smtpPort > 65535)
+        {
+            throw new ArgumentOutOfRangeException(nameof(smtpPort), "SMTP port must be between 1 and 65535.");
+        }
+
         _smtpServer = smtpServer;
         _smtpPort = smtpPort;
         _fromEmail = fromEmail;
-        _fromName = fromName;
+        _fromName = fromName ?? fromEmail;
         _password = password;
     }
 
-    public async Task SendEmailAsync(string toName, string toEmail, string subject, string body, string attachmentPath)
+    public async Task SendEmailAsync(
+        string recipientName,
+        string recipientEmail,
+        string subject,
+        string body,
+        string? attachmentPath = null)
     {
-        var email = new MimeMessage();
-        email.From.Add(new MailboxAddress(_fromName, _fromEmail));
-        email.To.Add(new MailboxAddress(toName, toEmail));
-        email.Subject = subject;
+        ArgumentException.ThrowIfNullOrWhiteSpace(recipientEmail);
 
-        var bodyPart = new TextPart("plain") { Text = body };
-        var attachmentPart = new MimePart("application", "zip")
+        using var message = new MimeMessage();
+
+        message.From.Add(new MailboxAddress(_fromName, _fromEmail));
+        message.To.Add(new MailboxAddress(recipientName ?? recipientEmail, recipientEmail));
+        message.Subject = subject ?? "Log Report";
+
+        var builder = new BodyBuilder
         {
-            Content = new MimeContent(File.OpenRead(attachmentPath)),
-            ContentDisposition = new ContentDisposition(ContentDisposition.Attachment),
-            ContentTransferEncoding = ContentEncoding.Base64,
-            FileName = Path.GetFileName(attachmentPath)
+            TextBody = body ?? string.Empty
         };
 
-        var multipart = new Multipart("mixed");
-        multipart.Add(bodyPart);
-        multipart.Add(attachmentPart);
-
-        email.Body = multipart;
-
-        using (var client = new SmtpClient())
+        if (!string.IsNullOrWhiteSpace(attachmentPath) && File.Exists(attachmentPath))
         {
-            await client.ConnectAsync(_smtpServer, _smtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_fromEmail, _password);
-            await client.SendAsync(email);
-            await client.DisconnectAsync(true);
-        }
-    }
-
-    public static bool IsValidEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-            return false;
-
-        try
-        {
-            email = Regex.Replace(email, @"(@)(.+)$", DomainMapper, RegexOptions.None, TimeSpan.FromMilliseconds(200));
-
-            static string DomainMapper(Match match)
+            try
             {
-                var idn = new IdnMapping();
-                var domainName = idn.GetAscii(match.Groups[2].Value);
-                return match.Groups[1].Value + domainName;
+                await builder.Attachments.AddAsync(attachmentPath);
+            }
+            catch (IOException ex)
+            {
+                throw new IOException($"Failed to attach file: {attachmentPath}", ex);
             }
         }
-        catch (RegexMatchTimeoutException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
 
+        message.Body = builder.ToMessageBody();
+
+        using var client = new SmtpClient();
         try
         {
-            return Regex.IsMatch(email,
-                @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
-                RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(250));
+            await client.ConnectAsync(_smtpServer, _smtpPort, MailKit.Security.SecureSocketOptions.StartTls)
+                .ConfigureAwait(false);
+
+            await client.AuthenticateAsync(_fromEmail, _password)
+                .ConfigureAwait(false);
+
+            await client.SendAsync(message)
+                .ConfigureAwait(false);
         }
-        catch (RegexMatchTimeoutException)
+        catch (MailKit.Security.AuthenticationException ex)
         {
-            return false;
+            throw new InvalidOperationException("SMTP authentication failed. Check email credentials.", ex);
+        }
+        catch (MailKit.Net.Smtp.SmtpCommandException ex)
+        {
+            throw new InvalidOperationException($"SMTP command failed: {ex.Message}", ex);
+        }
+        catch (MailKit.Net.Smtp.SmtpProtocolException ex)
+        {
+            throw new IOException($"SMTP protocol error: {ex.Message}", ex);
+        }
+        finally
+        {
+            if (client.IsConnected)
+            {
+                await client.DisconnectAsync(true).ConfigureAwait(false);
+            }
         }
     }
 }
