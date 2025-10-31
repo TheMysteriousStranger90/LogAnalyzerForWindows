@@ -22,7 +22,7 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
     private DateTime? _endDate;
     private string? _currentSessionId;
 
-    public AvaloniaList<LogEntry> CurrentPageLogs { get; } = new();
+    public AvaloniaList<LogEntry> CurrentPageLogs { get; private set; } = new();
     public AvaloniaList<int> PageSizes { get; } = new() { 25, 50, 100, 200, 500 };
 
     public int CurrentPage

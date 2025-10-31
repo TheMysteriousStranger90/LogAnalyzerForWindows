@@ -408,8 +408,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task ViewHistoryAsync()
     {
-        UseDatabaseMode = true;
         TextBlock = "Loading history from database...";
+        IsLoading = true;
 
         try
         {
@@ -417,26 +417,49 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
             if (sessions.Count == 0)
             {
-                TextBlock = "No history found in database.";
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = "No history found in database.";
+                    IsLoading = false;
+                });
                 return;
             }
 
             var stats = await _logRepository.GetLogStatisticsAsync().ConfigureAwait(false);
             var statsText = string.Join(", ", stats.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
 
-            TextBlock = $"History loaded. Total sessions: {sessions.Count}. Statistics: {statsText}";
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                UseDatabaseMode = true;
+                TextBlock = $"History loaded. Total sessions: {sessions.Count}. Statistics: {statsText}";
+            });
 
-            await PaginationViewModel!.LoadLogsAsync().ConfigureAwait(false);
+            if (PaginationViewModel != null)
+            {
+                await PaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+            }
         }
         catch (InvalidOperationException ex)
         {
             Debug.WriteLine($"Error loading history: {ex.Message}");
-            TextBlock = $"Error loading history: {ex.Message}";
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                TextBlock = $"Error loading history: {ex.Message}";
+                IsLoading = false;
+            });
         }
         catch (IOException ex)
         {
             Debug.WriteLine($"IO error loading history: {ex.Message}");
-            TextBlock = $"IO error loading history: {ex.Message}";
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                TextBlock = $"IO error loading history: {ex.Message}";
+                IsLoading = false;
+            });
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => { IsLoading = false; });
         }
     }
 

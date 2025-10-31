@@ -16,6 +16,7 @@
 
     <Window.Styles>
         <StyleInclude Source="/Styles/Styles.axaml" />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
     </Window.Styles>
 
     <Grid RowDefinitions="Auto, *, Auto, Auto, Auto">
