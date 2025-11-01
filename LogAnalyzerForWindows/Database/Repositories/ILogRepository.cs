@@ -14,5 +14,6 @@ internal interface ILogRepository
         string? sessionId = null);
     Task<List<string>> GetSessionIdsAsync();
     Task<int> DeleteOldLogsAsync(DateTime olderThan);
+    Task<int> ClearAllLogsAsync();
     Task<Dictionary<string, int>> GetLogStatisticsAsync(string? sessionId = null);
 }

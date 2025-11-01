@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using LogAnalyzerForWindows.Formatter.Interfaces;
+﻿using LogAnalyzerForWindows.Formatter.Interfaces;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Analyzer;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;

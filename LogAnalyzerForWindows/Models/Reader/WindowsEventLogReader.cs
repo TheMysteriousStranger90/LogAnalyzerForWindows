@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Management;
 using System.Runtime.Versioning;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;

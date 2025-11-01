@@ -204,21 +204,16 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         private set => SetProperty(ref _paginationViewModel, value);
     }
 
-    public bool UseDatabaseMode
+    private bool _hasDatabaseRecords;
+
+    public bool HasDatabaseRecords
     {
-        get => _useDatabaseMode;
-        set
+        get => _hasDatabaseRecords;
+        private set
         {
-            if (SetProperty(ref _useDatabaseMode, value))
+            if (SetProperty(ref _hasDatabaseRecords, value))
             {
-                if (value)
-                {
-                    InitializeDatabaseMode();
-                }
-                else
-                {
-                    PaginationViewModel = null;
-                }
+                (ClearHistoryCommand as RelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
@@ -280,10 +275,15 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _logRepository = new LogRepository();
 
         ViewHistoryCommand = new RelayCommand(async () => await ViewHistoryAsync().ConfigureAwait(false));
-        ClearHistoryCommand = new RelayCommand(async () => await ClearOldHistoryAsync().ConfigureAwait(false),
-            () => UseDatabaseMode);
+
+        ClearHistoryCommand = new RelayCommand(
+            async () => await ClearOldHistoryAsync().ConfigureAwait(false),
+            CanClearHistory
+        );
 
         InitializeDatabaseAsync();
+
+        _ = CheckDatabaseRecordsAsync();
     }
 
     private static async void InitializeDatabaseAsync()
@@ -308,6 +308,65 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     {
         PaginationViewModel = new PaginationViewModel(_logRepository);
         _ = PaginationViewModel.LoadLogsAsync();
+    }
+
+    private async Task CheckDatabaseRecordsAsync()
+    {
+        try
+        {
+            var stats = await _logRepository.GetLogStatisticsAsync().ConfigureAwait(false);
+            var totalCount = stats.Values.Sum();
+            var hasRecords = totalCount > 0;
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                HasDatabaseRecords = hasRecords;
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Invalid operation while checking database records: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                HasDatabaseRecords = false;
+            });
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error while checking database records: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                HasDatabaseRecords = false;
+            });
+        }
+    }
+
+    public bool UseDatabaseMode
+    {
+        get => _useDatabaseMode;
+        set
+        {
+            if (SetProperty(ref _useDatabaseMode, value))
+            {
+                if (value)
+                {
+                    InitializeDatabaseMode();
+                }
+                else
+                {
+                    PaginationViewModel = null;
+                }
+
+                (ClearHistoryCommand as RelayCommand)?.OnCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool CanToggleDatabaseMode => !_monitor.IsMonitoring;
+
+    private bool CanClearHistory()
+    {
+        return UseDatabaseMode && HasDatabaseRecords;
     }
 
     private void UpdateCanSaveState()
@@ -380,6 +439,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 {
                     await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
                     Debug.WriteLine($"Saved {newUniqueLevelLogs.Count} logs to database");
+
+                    await CheckDatabaseRecordsAsync().ConfigureAwait(false);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -408,8 +469,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task ViewHistoryAsync()
     {
-        TextBlock = "Loading history from database...";
-        IsLoading = true;
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            TextBlock = "Loading history from database...";
+            IsLoading = true;
+        });
 
         try
         {
@@ -420,6 +484,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     TextBlock = "No history found in database.";
+                    HasDatabaseRecords = false;
                     IsLoading = false;
                 });
                 return;
@@ -427,10 +492,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
             var stats = await _logRepository.GetLogStatisticsAsync().ConfigureAwait(false);
             var statsText = string.Join(", ", stats.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+            var totalCount = stats.Values.Sum();
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 UseDatabaseMode = true;
+                HasDatabaseRecords = totalCount > 0;
                 TextBlock = $"History loaded. Total sessions: {sessions.Count}. Statistics: {statsText}";
             });
 
@@ -459,41 +526,73 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            await Dispatcher.UIThread.InvokeAsync(() => { IsLoading = false; });
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                IsLoading = false;
+            });
         }
     }
 
     private async Task ClearOldHistoryAsync()
     {
-        TextBlock = "Clearing old history...";
-        IsLoading = true;
-
-        try
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            var cutoffDate = DateTime.UtcNow.AddDays(-30);
-            var deletedCount = await _logRepository.DeleteOldLogsAsync(cutoffDate).ConfigureAwait(false);
+            TextBlock = "Clearing old history...";
+            IsLoading = true;
+        });
 
-            TextBlock = $"Deleted {deletedCount} old log entries (older than 30 days).";
-
-            if (UseDatabaseMode && PaginationViewModel != null)
+        await Task.Run(async () =>
+        {
+            try
             {
-                await PaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+                var cutoffDate = DateTime.UtcNow.AddDays(-30);
+                var deletedCount = await _logRepository.DeleteOldLogsAsync(cutoffDate).ConfigureAwait(false);
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = $"Deleted {deletedCount} old log entries (older than 30 days).";
+                });
+
+                await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+
+                var currentUseDatabaseMode = false;
+                PaginationViewModel? currentPaginationViewModel = null;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    currentUseDatabaseMode = UseDatabaseMode;
+                    currentPaginationViewModel = PaginationViewModel;
+                });
+
+                if (currentUseDatabaseMode && currentPaginationViewModel != null)
+                {
+                    await currentPaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+                }
             }
-        }
-        catch (InvalidOperationException ex)
-        {
-            Debug.WriteLine($"Error clearing history: {ex.Message}");
-            TextBlock = $"Error clearing history: {ex.Message}";
-        }
-        catch (IOException ex)
-        {
-            Debug.WriteLine($"IO error clearing history: {ex.Message}");
-            TextBlock = $"IO error clearing history: {ex.Message}";
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine($"Error clearing history: {ex.Message}");
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = $"Error clearing history: {ex.Message}";
+                });
+            }
+            catch (IOException ex)
+            {
+                Debug.WriteLine($"IO error clearing history: {ex.Message}");
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = $"IO error clearing history: {ex.Message}";
+                });
+            }
+            finally
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    IsLoading = false;
+                });
+            }
+        }).ConfigureAwait(false);
     }
 
     private void StopMonitoring()
@@ -679,6 +778,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         {
             (StartCommand as RelayCommand)?.OnCanExecuteChanged();
             (StopCommand as RelayCommand)?.OnCanExecuteChanged();
+
+            // Notify that CanToggleDatabaseMode changed
+            OnPropertyChanged(nameof(CanToggleDatabaseMode));
 
             if (_monitor.IsMonitoring)
             {

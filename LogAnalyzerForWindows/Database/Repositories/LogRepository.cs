@@ -95,6 +95,13 @@ internal sealed class LogRepository : ILogRepository
         return await context.SaveChangesAsync().ConfigureAwait(false);
     }
 
+    public async Task<int> ClearAllLogsAsync()
+    {
+        using var context = new LogAnalyzerDbContext();
+
+        return await context.Database.ExecuteSqlRawAsync("DELETE FROM LogEntries").ConfigureAwait(false);
+    }
+
     public async Task<Dictionary<string, int>> GetLogStatisticsAsync(string? sessionId = null)
     {
         using var context = new LogAnalyzerDbContext();
