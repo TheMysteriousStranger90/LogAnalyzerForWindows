@@ -1,4 +1,6 @@
-﻿using System.ComponentModel;
+﻿// Полный исправленный класс MainWindowViewModel
+
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Mail;
 using System.Net.Sockets;
@@ -197,11 +199,31 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private string _currentSessionId = string.Empty;
     private PaginationViewModel? _paginationViewModel;
     private bool _useDatabaseMode;
+    private AvaloniaList<string> _availableSessions = new();
+    private string? _selectedSession;
 
     public PaginationViewModel? PaginationViewModel
     {
         get => _paginationViewModel;
         private set => SetProperty(ref _paginationViewModel, value);
+    }
+
+    public AvaloniaList<string> AvailableSessions
+    {
+        get => _availableSessions;
+        private set => SetProperty(ref _availableSessions, value);
+    }
+
+    public string? SelectedSession
+    {
+        get => _selectedSession;
+        set
+        {
+            if (SetProperty(ref _selectedSession, value))
+            {
+                ApplySessionFilter();
+            }
+        }
     }
 
     private bool _hasDatabaseRecords;
@@ -307,7 +329,44 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private void InitializeDatabaseMode()
     {
         PaginationViewModel = new PaginationViewModel(_logRepository);
+        _ = LoadSessionsAsync();
         _ = PaginationViewModel.LoadLogsAsync();
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        try
+        {
+            var sessions = await _logRepository.GetSessionIdsAsync().ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                AvailableSessions.Clear();
+                AvailableSessions.Add("All Sessions");
+                foreach (var session in sessions)
+                {
+                    AvailableSessions.Add(session);
+                }
+
+                SelectedSession = "All Sessions";
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Error loading sessions: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error loading sessions: {ex.Message}");
+        }
+    }
+
+    private void ApplySessionFilter()
+    {
+        if (PaginationViewModel == null) return;
+
+        var sessionFilter = SelectedSession == "All Sessions" ? null : SelectedSession;
+        PaginationViewModel.SetFilters(sessionId: sessionFilter);
     }
 
     private async Task CheckDatabaseRecordsAsync()
@@ -779,7 +838,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             (StartCommand as RelayCommand)?.OnCanExecuteChanged();
             (StopCommand as RelayCommand)?.OnCanExecuteChanged();
 
-            // Notify that CanToggleDatabaseMode changed
             OnPropertyChanged(nameof(CanToggleDatabaseMode));
 
             if (_monitor.IsMonitoring)
