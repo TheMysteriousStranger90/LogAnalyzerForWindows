@@ -1,6 +1,4 @@
-﻿// Полный исправленный класс MainWindowViewModel
-
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Mail;
 using System.Net.Sockets;
@@ -34,6 +32,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private readonly FileSystemWatcher _folderWatcher;
 
     private string _selectedLogLevel = string.Empty;
+    private string _selectedLogSource = string.Empty;
     private string _selectedTime = string.Empty;
     private ICommand? _startCommand;
     private ICommand? _stopCommand;
@@ -42,11 +41,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private readonly HashSet<LogEntry> _processedLogs = [];
 
-    public AvaloniaList<string> LogLevels { get; } =
-        ["Information", "Warning", "Error", "AuditSuccess", "AuditFailure"];
-
+    public AvaloniaList<string> LogSources { get; } = new();
+    public AvaloniaList<string> LogLevels { get; private set; } = new();
     public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days"];
-
     public AvaloniaList<string> Formats { get; } = ["txt", "json"];
 
     private string _textBlock = string.Empty;
@@ -63,6 +60,19 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _outputText;
         set => SetProperty(ref _outputText, value);
+    }
+
+    public string SelectedLogSource
+    {
+        get => _selectedLogSource;
+        set
+        {
+            if (SetProperty(ref _selectedLogSource, value))
+            {
+                LoadAvailableLevelsForSource();
+                (StartCommand as RelayCommand)?.OnCanExecuteChanged();
+            }
+        }
     }
 
     public string SelectedLogLevel
@@ -304,8 +314,120 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         );
 
         InitializeDatabaseAsync();
-
         _ = CheckDatabaseRecordsAsync();
+
+        LoadAvailableLogSources();
+    }
+
+    [SupportedOSPlatform("windows")]
+    private void LoadAvailableLogSources()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                var sources = WindowsEventLogReader.GetAvailableLogNames();
+
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    LogSources.Clear();
+                    foreach (var source in sources)
+                    {
+                        LogSources.Add(source);
+                    }
+
+                    if (LogSources.Contains("System"))
+                    {
+                        SelectedLogSource = "System";
+                    }
+                    else if (LogSources.Count > 0)
+                    {
+                        SelectedLogSource = LogSources[0];
+                    }
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine($"Invalid operation while loading log sources: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Debug.WriteLine($"IO error while loading log sources: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unexpected error loading log sources: {ex.Message}");
+                throw;
+            }
+        });
+    }
+
+    [SupportedOSPlatform("windows")]
+    private void LoadAvailableLevelsForSource()
+    {
+        if (string.IsNullOrEmpty(SelectedLogSource))
+        {
+            return;
+        }
+
+        TextBlock = $"Loading available levels for {SelectedLogSource}...";
+        IsLoading = true;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                var levels = WindowsEventLogReader.GetAvailableLevelsForLog(SelectedLogSource);
+
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var previousSelection = SelectedLogLevel;
+
+                    LogLevels.Clear();
+                    foreach (var level in levels)
+                    {
+                        LogLevels.Add(level);
+                    }
+
+                    if (!string.IsNullOrEmpty(previousSelection) && LogLevels.Contains(previousSelection))
+                    {
+                        SelectedLogLevel = previousSelection;
+                    }
+                    else if (LogLevels.Count > 0)
+                    {
+                        SelectedLogLevel = LogLevels[0];
+                    }
+
+                    TextBlock = $"Available levels loaded for {SelectedLogSource}";
+                    IsLoading = false;
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine($"Invalid operation while loading levels for {SelectedLogSource}: {ex.Message}");
+
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = $"Error loading levels: {ex.Message}";
+                    IsLoading = false;
+                });
+            }
+            catch (IOException ex)
+            {
+                Debug.WriteLine($"IO error while loading levels for {SelectedLogSource}: {ex.Message}");
+
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = $"Error loading levels: {ex.Message}";
+                    IsLoading = false;
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unexpected error loading levels for {SelectedLogSource}: {ex.Message}");
+                throw;
+            }
+        });
     }
 
     private static async void InitializeDatabaseAsync()
@@ -377,26 +499,17 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             var totalCount = stats.Values.Sum();
             var hasRecords = totalCount > 0;
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                HasDatabaseRecords = hasRecords;
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { HasDatabaseRecords = hasRecords; });
         }
         catch (InvalidOperationException ex)
         {
             Debug.WriteLine($"Invalid operation while checking database records: {ex.Message}");
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                HasDatabaseRecords = false;
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { HasDatabaseRecords = false; });
         }
         catch (IOException ex)
         {
             Debug.WriteLine($"IO error while checking database records: {ex.Message}");
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                HasDatabaseRecords = false;
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { HasDatabaseRecords = false; });
         }
     }
 
@@ -435,6 +548,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private bool CanStartMonitoring() =>
+        !string.IsNullOrEmpty(SelectedLogSource) &&
         !string.IsNullOrEmpty(SelectedLogLevel) &&
         !string.IsNullOrEmpty(SelectedTime) &&
         !_monitor.IsMonitoring;
@@ -452,9 +566,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _processedLogs.Clear();
         UpdateCanSaveState();
 
-        _currentSessionId = $"Session_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+        _currentSessionId = $"Session_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{SelectedLogSource}";
 
-        ILogReader reader = new WindowsEventLogReader("System");
+        ILogReader reader = new WindowsEventLogReader(SelectedLogSource);
         var generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
         ILogFormatter formatter = new LogFormatter();
         ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputTextOnUiThread);
@@ -517,7 +631,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                     var matchingCount = _processedLogs.Count(l =>
                         string.Equals(l.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
                     TextBlock =
-                        $"Monitoring... Unique '{SelectedLogLevel}' logs found: {matchingCount} (Session: {_currentSessionId})";
+                        $"Monitoring {SelectedLogSource}... Unique '{SelectedLogLevel}' logs found: {matchingCount} (Session: {_currentSessionId})";
                 });
             }
         };
@@ -585,10 +699,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                IsLoading = false;
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { IsLoading = false; });
         }
     }
 
@@ -631,10 +742,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             catch (InvalidOperationException ex)
             {
                 Debug.WriteLine($"Error clearing history: {ex.Message}");
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"Error clearing history: {ex.Message}";
-                });
+                await Dispatcher.UIThread.InvokeAsync(() => { TextBlock = $"Error clearing history: {ex.Message}"; });
             }
             catch (IOException ex)
             {
@@ -646,10 +754,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             }
             finally
             {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    IsLoading = false;
-                });
+                await Dispatcher.UIThread.InvokeAsync(() => { IsLoading = false; });
             }
         }).ConfigureAwait(false);
     }
