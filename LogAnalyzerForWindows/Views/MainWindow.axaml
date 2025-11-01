@@ -165,32 +165,36 @@
                     </StackPanel>
 
                     <!-- Data Grid -->
-                    <DataGrid Grid.Row="1"
-                              ItemsSource="{Binding PaginationViewModel.CurrentPageLogs}"
-                              IsReadOnly="True"
-                              AutoGenerateColumns="False"
-                              GridLinesVisibility="All"
-                              BorderThickness="1"
-                              BorderBrush="#CCCCCC"
-                              CanUserReorderColumns="True"
-                              CanUserResizeColumns="True"
-                              CanUserSortColumns="True"
-                              Margin="0,10,0,0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Timestamp"
-                                                Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}"
-                                                Width="180"
-                                                IsReadOnly="True" />
-                            <DataGridTextColumn Header="Level"
-                                                Binding="{Binding Level}"
-                                                Width="120"
-                                                IsReadOnly="True" />
-                            <DataGridTextColumn Header="Message"
-                                                Binding="{Binding Message}"
-                                                Width="*"
-                                                IsReadOnly="True" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  Margin="0,10,0,0">
+                        <DataGrid ItemsSource="{Binding PaginationViewModel.CurrentPageLogs}"
+                                  IsReadOnly="True"
+                                  AutoGenerateColumns="False"
+                                  GridLinesVisibility="All"
+                                  BorderThickness="1"
+                                  BorderBrush="#CCCCCC"
+                                  CanUserReorderColumns="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Timestamp"
+                                                    Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}"
+                                                    Width="180"
+                                                    IsReadOnly="True" />
+                                <DataGridTextColumn Header="Level"
+                                                    Binding="{Binding Level}"
+                                                    Width="120"
+                                                    IsReadOnly="True" />
+                                <DataGridTextColumn Header="Message"
+                                                    Binding="{Binding Message}"
+                                                    Width="*"
+                                                    MinWidth="400"
+                                                    IsReadOnly="True" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </ScrollViewer>
 
                     <!-- Pagination Controls -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"

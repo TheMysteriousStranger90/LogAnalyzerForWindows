@@ -43,8 +43,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public AvaloniaList<string> LogSources { get; } = new();
     public AvaloniaList<string> LogLevels { get; private set; } = new();
-    public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days"];
-    public AvaloniaList<string> Formats { get; } = ["txt", "json"];
+    public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days", "Last 7 days"];    public AvaloniaList<string> Formats { get; } = ["txt", "json"];
 
     private string _textBlock = string.Empty;
 
@@ -580,6 +579,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             "Last hour" => TimeSpan.FromHours(1),
             "Last 24 hours" => TimeSpan.FromDays(1),
             "Last 3 days" => TimeSpan.FromDays(3),
+            "Last 7 days" => TimeSpan.FromDays(7),
             _ => TimeSpan.Zero
         };
 
