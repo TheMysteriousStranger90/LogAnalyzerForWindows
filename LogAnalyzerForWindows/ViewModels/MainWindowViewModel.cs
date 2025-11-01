@@ -40,10 +40,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private EventHandler<LogsChangedEventArgs>? _onLogsChangedHandler;
 
     private readonly HashSet<LogEntry> _processedLogs = [];
+    private CancellationTokenSource? _processingCts;
 
     public AvaloniaList<string> LogSources { get; } = new();
     public AvaloniaList<string> LogLevels { get; private set; } = new();
-    public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days", "Last 7 days"];    public AvaloniaList<string> Formats { get; } = ["txt", "json"];
+    public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days", "Last 7 days"];
+    public AvaloniaList<string> Formats { get; } = ["txt", "json"];
 
     private string _textBlock = string.Empty;
 
@@ -565,6 +567,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _processedLogs.Clear();
         UpdateCanSaveState();
 
+        _processingCts?.Cancel();
+        _processingCts?.Dispose();
+        _processingCts = new CancellationTokenSource();
+
         _currentSessionId = $"Session_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{SelectedLogSource}";
 
         ILogReader reader = new WindowsEventLogReader(SelectedLogSource);
@@ -598,6 +604,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         _onLogsChangedHandler = async (sender, args) =>
         {
+            if (_processingCts == null || _processingCts.IsCancellationRequested)
+                return;
+
             var incomingLogs = args.Logs;
             var relevantLogs = timeFilter.Filter(incomingLogs);
             var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
@@ -608,26 +617,57 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
             if (newUniqueLevelLogs.Count > 0)
             {
-                try
+                _ = Task.Run(async () =>
                 {
-                    await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
-                    Debug.WriteLine($"Saved {newUniqueLevelLogs.Count} logs to database");
+                    try
+                    {
+                        await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
+                        Debug.WriteLine($"Bulk saved {newUniqueLevelLogs.Count} logs to database");
+                        await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        Debug.WriteLine($"Error saving logs to database: {ex.Message}");
+                    }
+                    catch (IOException ex)
+                    {
+                        Debug.WriteLine($"IO error saving logs to database: {ex.Message}");
+                    }
+                }, _processingCts.Token);
 
-                    await CheckDatabaseRecordsAsync().ConfigureAwait(false);
-                }
-                catch (InvalidOperationException ex)
+                const int uiBatchSize = 50;
+                for (int i = 0; i < newUniqueLevelLogs.Count; i += uiBatchSize)
                 {
-                    Debug.WriteLine($"Error saving logs to database: {ex.Message}");
-                }
-                catch (IOException ex)
-                {
-                    Debug.WriteLine($"IO error saving logs to database: {ex.Message}");
+                    if (_processingCts.IsCancellationRequested)
+                        break;
+
+                    var batch = newUniqueLevelLogs.Skip(i).Take(uiBatchSize).ToList();
+                    var batchIndex = i;
+
+                    await Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        try
+                        {
+                            UpdateCanSaveState();
+                            await manager.ProcessLogsAsync(batch, _processingCts.Token).ConfigureAwait(false);
+
+                            var matchingCount = _processedLogs.Count(l =>
+                                string.Equals(l.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
+                            TextBlock =
+                                $"Monitoring {SelectedLogSource}... '{SelectedLogLevel}' logs: {matchingCount} " +
+                                $"(Processing batch {batchIndex / uiBatchSize + 1}/{(newUniqueLevelLogs.Count + uiBatchSize - 1) / uiBatchSize})";
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Debug.WriteLine("Processing cancelled");
+                        }
+                    }).ConfigureAwait(false);
+
+                    await Task.Delay(10, _processingCts.Token).ConfigureAwait(false);
                 }
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    UpdateCanSaveState();
-                    manager.ProcessLogs(newUniqueLevelLogs);
                     var matchingCount = _processedLogs.Count(l =>
                         string.Equals(l.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
                     TextBlock =
@@ -733,25 +773,16 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         catch (InvalidOperationException ex)
         {
             Debug.WriteLine($"Error clearing history: {ex.Message}");
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                TextBlock = $"Error clearing history: {ex.Message}";
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { TextBlock = $"Error clearing history: {ex.Message}"; });
         }
         catch (IOException ex)
         {
             Debug.WriteLine($"IO error clearing history: {ex.Message}");
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                TextBlock = $"IO error clearing history: {ex.Message}";
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { TextBlock = $"IO error clearing history: {ex.Message}"; });
         }
         finally
         {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                IsLoading = false;
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => { IsLoading = false; });
         }
     }
 
@@ -761,6 +792,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
+            _processingCts?.Cancel();
+
             if (_monitor.IsMonitoring)
             {
                 _monitor.StopMonitoring();
@@ -993,6 +1026,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 {
                     StopMonitoring();
                 }
+
+                _processingCts?.Cancel();
+                _processingCts?.Dispose();
 
                 _monitor.MonitoringStarted -= OnMonitoringStateChanged;
                 _monitor.MonitoringStopped -= OnMonitoringStateChanged;

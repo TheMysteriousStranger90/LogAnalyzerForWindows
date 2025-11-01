@@ -21,12 +21,9 @@ internal sealed class LogManager : ILogManager
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
     }
 
-    public void ProcessLogs(IEnumerable<LogEntry> logs)
+    public async Task ProcessLogsAsync(IEnumerable<LogEntry> logs, CancellationToken cancellationToken = default)
     {
-        if (logs == null)
-        {
-            return;
-        }
+        if (logs == null) return;
 
         try
         {
@@ -43,29 +40,31 @@ internal sealed class LogManager : ILogManager
             return;
         }
 
+        const int batchSize = 100;
         var logsList = logs.ToList();
 
-        foreach (var log in logsList)
+        for (int i = 0; i < logsList.Count; i += batchSize)
         {
-            if (log == null) continue;
+            cancellationToken.ThrowIfCancellationRequested();
 
-            try
+            var batch = logsList.Skip(i).Take(batchSize);
+
+            foreach (var log in batch)
             {
-                var formattedLog = _formatter.Format(log);
-                _writer.Write(formattedLog);
+                if (log == null) continue;
+
+                try
+                {
+                    var formattedLog = _formatter.Format(log);
+                    _writer.Write(formattedLog);
+                }
+                catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+                {
+                    Console.WriteLine($"An error occurred while formatting or writing log: {ex.Message}");
+                }
             }
-            catch (ArgumentException ex)
-            {
-                Console.WriteLine($"An error occurred while formatting or writing log (Timestamp: {log.Timestamp}, Level: {log.Level}): {ex.Message}");
-            }
-            catch (IOException ex)
-            {
-                Console.WriteLine($"An error occurred while formatting or writing log (Timestamp: {log.Timestamp}, Level: {log.Level}): {ex.Message}");
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                Console.WriteLine($"An error occurred while formatting or writing log (Timestamp: {log.Timestamp}, Level: {log.Level}): {ex.Message}");
-            }
+
+            await Task.Delay(1, cancellationToken).ConfigureAwait(false);
         }
     }
 }

@@ -4,5 +4,5 @@ namespace LogAnalyzerForWindows.Interfaces;
 
 internal interface ILogManager
 {
-    void ProcessLogs(IEnumerable<LogEntry> logs);
+    Task ProcessLogsAsync(IEnumerable<LogEntry> logs, CancellationToken cancellationToken = default);
 }

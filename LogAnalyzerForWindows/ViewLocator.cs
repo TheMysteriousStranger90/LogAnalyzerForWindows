@@ -3,6 +3,10 @@ using Avalonia.Controls.Templates;
 
 namespace LogAnalyzerForWindows;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance",
+    "CA1812:Avoid uninstantiated internal classes",
+    Justification = "This class is instantiated by Avalonia framework through XAML DataTemplate binding")]
 internal sealed class ViewLocator : IDataTemplate
 {
     public Control? Build(object? data)
