@@ -707,56 +707,52 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     {
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            TextBlock = "Clearing old history...";
+            TextBlock = "Clearing all history...";
             IsLoading = true;
         });
 
-        await Task.Run(async () =>
+        try
         {
-            try
+            var deletedCount = await _logRepository.ClearAllLogsAsync().ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var cutoffDate = DateTime.UtcNow.AddDays(-30);
-                var deletedCount = await _logRepository.DeleteOldLogsAsync(cutoffDate).ConfigureAwait(false);
+                TextBlock = $"Deleted {deletedCount} log entries. Database cleared.";
+            });
 
-                await Dispatcher.UIThread.InvokeAsync(() =>
+            await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                if (UseDatabaseMode && PaginationViewModel != null)
                 {
-                    TextBlock = $"Deleted {deletedCount} old log entries (older than 30 days).";
-                });
-
-                await CheckDatabaseRecordsAsync().ConfigureAwait(false);
-
-                var currentUseDatabaseMode = false;
-                PaginationViewModel? currentPaginationViewModel = null;
-
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    currentUseDatabaseMode = UseDatabaseMode;
-                    currentPaginationViewModel = PaginationViewModel;
-                });
-
-                if (currentUseDatabaseMode && currentPaginationViewModel != null)
-                {
-                    await currentPaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+                    await PaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
                 }
-            }
-            catch (InvalidOperationException ex)
+            }).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Error clearing history: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                Debug.WriteLine($"Error clearing history: {ex.Message}");
-                await Dispatcher.UIThread.InvokeAsync(() => { TextBlock = $"Error clearing history: {ex.Message}"; });
-            }
-            catch (IOException ex)
+                TextBlock = $"Error clearing history: {ex.Message}";
+            });
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error clearing history: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                Debug.WriteLine($"IO error clearing history: {ex.Message}");
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"IO error clearing history: {ex.Message}";
-                });
-            }
-            finally
+                TextBlock = $"IO error clearing history: {ex.Message}";
+            });
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                await Dispatcher.UIThread.InvokeAsync(() => { IsLoading = false; });
-            }
-        }).ConfigureAwait(false);
+                IsLoading = false;
+            });
+        }
     }
 
     private void StopMonitoring()
