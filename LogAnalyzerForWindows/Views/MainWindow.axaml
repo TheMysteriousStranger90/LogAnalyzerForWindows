@@ -16,7 +16,7 @@
 
     <Window.Styles>
         <StyleInclude Source="/Styles/Styles.axaml" />
-        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     </Window.Styles>
 
     <Grid RowDefinitions="Auto, *, Auto, Auto, Auto">
@@ -83,13 +83,27 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <!-- Save Logs Button -->
-                    <Button Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Margin="0,10,0,0">
+                    <!-- Save Logs Button - Only in Real-time Mode -->
+                    <Button Command="{Binding SaveCommand}"
+                            IsEnabled="{Binding CanSave}"
+                            IsVisible="{Binding !UseDatabaseMode}"
+                            Margin="0,10,0,0">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Image Source="{SvgImage /Assets/save.svg}" Height="16" Width="16" />
                             <TextBlock Text="Save Logs" VerticalAlignment="Center" />
                         </StackPanel>
                         <ToolTip.Tip>Saves the current logs to a file</ToolTip.Tip>
+                    </Button>
+
+                    <!-- Export Session Button - Only in Database Mode -->
+                    <Button Command="{Binding ExportSessionCommand}"
+                            IsVisible="{Binding UseDatabaseMode}"
+                            Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Image Source="{SvgImage /Assets/save.svg}" Height="16" Width="16" />
+                            <TextBlock Text="Export Session" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ToolTip.Tip>Export all logs from the selected session</ToolTip.Tip>
                     </Button>
 
                     <!-- Open Folder Button -->
@@ -162,6 +176,11 @@
                                   SelectedItem="{Binding SelectedSession}"
                                   MinWidth="300"
                                   ToolTip.Tip="Filter logs by monitoring session" />
+                        <TextBlock Text="{Binding PaginationViewModel.TotalRecords, StringFormat='Total: {0} logs'}"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="#0078D4"
+                                   Margin="10,0,0,0" />
                     </StackPanel>
 
                     <!-- Data Grid -->

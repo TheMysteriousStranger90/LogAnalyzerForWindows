@@ -112,6 +112,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             if (SetProperty(ref _selectedFormat, value))
             {
                 UpdateCanSaveState();
+                (ExportSessionCommand as RelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
@@ -166,6 +167,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SaveCommand { get; }
     public ICommand OpenFolderCommand { get; }
     public ICommand ArchiveLatestFolderCommand { get; }
+    public ICommand ExportSessionCommand { get; }
 
     public ICommand SendEmailCommand => _sendEmailCommand ??= new RelayCommand(
         async () => await SendEmailAsync().ConfigureAwait(false),
@@ -234,6 +236,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             if (SetProperty(ref _selectedSession, value))
             {
                 ApplySessionFilter();
+                (ExportSessionCommand as RelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
@@ -266,7 +269,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _fileSystemService = fileSystemService ?? throw new ArgumentNullException(nameof(fileSystemService));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
-        _paginationViewModelFactory = paginationViewModelFactory ?? throw new ArgumentNullException(nameof(paginationViewModelFactory));
+        _paginationViewModelFactory = paginationViewModelFactory ??
+                                      throw new ArgumentNullException(nameof(paginationViewModelFactory));
 
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
@@ -276,6 +280,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
         OpenFolderCommand = new RelayCommand(OpenLogFolder, () => IsFolderExists);
         ArchiveLatestFolderCommand = new RelayCommand(ArchiveLogFolder, () => IsFolderExists);
+        ExportSessionCommand = new RelayCommand(
+            async () => await ExportSessionLogsAsync().ConfigureAwait(false),
+            CanExportSession
+        );
 
         var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var logPath = Path.Combine(documentsPath, "LogAnalyzerForWindows");
@@ -994,6 +1002,126 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 IsLoading = false;
             }
         });
+    }
+
+    private bool CanExportSession()
+    {
+        return UseDatabaseMode &&
+               !string.IsNullOrEmpty(SelectedSession) &&
+               SelectedSession != "All Sessions" &&
+               !string.IsNullOrEmpty(SelectedFormat);
+    }
+
+    private async Task ExportSessionLogsAsync()
+    {
+        if (string.IsNullOrEmpty(SelectedSession) || SelectedSession == "All Sessions")
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = "Please select a specific session to export.");
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            IsLoading = true;
+            TextBlock = $"Exporting session '{SelectedSession}'...";
+        });
+
+        try
+        {
+            var allLogs = new List<LogEntry>();
+            var pageSize = 1000;
+            var currentPage = 1;
+            int totalCount;
+
+            do
+            {
+                var (logs, count) = await _logRepository.GetLogsAsync(
+                    currentPage,
+                    pageSize,
+                    levelFilter: null,
+                    startDate: null,
+                    endDate: null,
+                    sessionId: SelectedSession
+                ).ConfigureAwait(false);
+
+                allLogs.AddRange(logs);
+                totalCount = count;
+                currentPage++;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    TextBlock = $"Loading session logs... {allLogs.Count}/{totalCount}");
+            } while (allLogs.Count < totalCount);
+
+            if (allLogs.Count == 0)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TextBlock = "No logs found in the selected session.";
+                    IsLoading = false;
+                });
+                return;
+            }
+
+            await Task.Run(() =>
+            {
+                try
+                {
+                    ILogFormatter formatter = SelectedFormat.ToUpperInvariant() switch
+                    {
+                        "JSON" => new JsonLogFormatter(),
+                        "TXT" => new LogFormatter(),
+                        _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
+                    };
+
+                    var linesToSave = allLogs.Select(log =>
+                    {
+                        var formattedResult = formatter.Format(log);
+                        return formattedResult.ToString() ?? string.Empty;
+                    });
+
+                    var logsContent = string.Join(Environment.NewLine, linesToSave);
+
+                    var safeSessionName = string.Join("_",
+                        SelectedSession.Split(Path.GetInvalidFileNameChars()));
+                    var fileName = $"{safeSessionName}.{SelectedFormat}";
+                    var filePath = Path.Combine(DefaultLogFolderPath, fileName);
+
+                    File.WriteAllText(filePath, logsContent);
+
+                    Dispatcher.UIThread.InvokeAsync(() =>
+                        TextBlock = $"Exported {allLogs.Count} logs from session '{SelectedSession}' to: {filePath}");
+                }
+                catch (IOException ex)
+                {
+                    Debug.WriteLine($"IO error exporting session logs: {ex.Message}");
+                    Dispatcher.UIThread.InvokeAsync(() =>
+                        TextBlock = $"Error exporting logs: {ex.Message}");
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    Debug.WriteLine($"Access denied exporting session logs: {ex.Message}");
+                    Dispatcher.UIThread.InvokeAsync(() =>
+                        TextBlock = $"Access denied: {ex.Message}");
+                }
+            }).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Error loading session logs: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = $"Error loading session logs: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error loading session logs: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = $"IO error loading session logs: {ex.Message}");
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
+        }
     }
 
     private void UpdateTextBlockOnUiThread(string message)
