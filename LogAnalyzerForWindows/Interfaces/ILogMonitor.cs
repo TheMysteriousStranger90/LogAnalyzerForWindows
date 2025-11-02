@@ -14,6 +14,11 @@ namespace LogAnalyzerForWindows.Interfaces;
 internal interface ILogMonitor
 {
     /// <summary>
+    /// Gets a value indicating whether monitoring is currently active.
+    /// </summary>
+    bool IsMonitoring { get; }
+
+    /// <summary>
     /// Occurs when new log entries are detected during monitoring.
     /// </summary>
     /// <remarks>
@@ -22,7 +27,17 @@ internal interface ILogMonitor
     /// The event may be raised on a background thread, so subscribers should handle
     /// thread synchronization if updating UI components.
     /// </remarks>
-    event EventHandler<LogsChangedEventArgs> LogsChanged;
+    event EventHandler<LogsChangedEventArgs>? LogsChanged;
+
+    /// <summary>
+    /// Occurs when monitoring has started.
+    /// </summary>
+    event EventHandler? MonitoringStarted;
+
+    /// <summary>
+    /// Occurs when monitoring has stopped.
+    /// </summary>
+    event EventHandler? MonitoringStopped;
 
     /// <summary>
     /// Starts monitoring the specified log reader for new log entries.

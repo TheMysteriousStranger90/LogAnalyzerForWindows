@@ -6,15 +6,11 @@ namespace LogAnalyzerForWindows.Views;
 
 internal sealed partial class MainWindow : Window, IDisposable
 {
-    private readonly MainWindowViewModel _viewModel;
     private bool _disposedValue;
 
     public MainWindow()
     {
         InitializeComponent();
-        _viewModel = new MainWindowViewModel();
-        DataContext = _viewModel;
-
         Closing += MainWindow_Closing;
     }
 
@@ -34,7 +30,10 @@ internal sealed partial class MainWindow : Window, IDisposable
         {
             if (disposing)
             {
-                _viewModel?.Dispose();
+                if (DataContext is MainWindowViewModel viewModel)
+                {
+                    viewModel.Dispose();
+                }
                 Closing -= MainWindow_Closing;
             }
 

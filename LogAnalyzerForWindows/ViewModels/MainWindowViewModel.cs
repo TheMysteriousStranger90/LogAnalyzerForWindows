@@ -14,22 +14,24 @@ using LogAnalyzerForWindows.Filter;
 using LogAnalyzerForWindows.Formatter;
 using LogAnalyzerForWindows.Formatter.Interfaces;
 using LogAnalyzerForWindows.Helpers;
+using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
 using LogAnalyzerForWindows.Models.Analyzer;
 using LogAnalyzerForWindows.Models.Reader;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 using LogAnalyzerForWindows.Models.Writer;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
-using LogAnalyzerForWindows.Services;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
 internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 {
-    private readonly EmailService _emailService;
-    private readonly FileSystemService _fileSystemService;
-    private readonly LogMonitor _monitor;
+    private readonly IEmailService _emailService;
+    private readonly IFileSystemService _fileSystemService;
+    private readonly ILogMonitor _monitor;
+    private readonly ILogRepository _logRepository;
     private readonly FileSystemWatcher _folderWatcher;
+    private readonly Func<ILogRepository, PaginationViewModel> _paginationViewModelFactory;
 
     private string _selectedLogLevel = string.Empty;
     private string _selectedLogSource = string.Empty;
@@ -206,7 +208,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private readonly LogRepository _logRepository;
     private string _currentSessionId = string.Empty;
     private PaginationViewModel? _paginationViewModel;
     private bool _useDatabaseMode;
@@ -254,12 +255,19 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ViewHistoryCommand { get; }
     public ICommand ClearHistoryCommand { get; }
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(
+        IEmailService emailService,
+        IFileSystemService fileSystemService,
+        ILogMonitor monitor,
+        ILogRepository logRepository,
+        Func<ILogRepository, PaginationViewModel> paginationViewModelFactory)
     {
-        _emailService = new EmailService();
-        _fileSystemService = new FileSystemService();
+        _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
+        _fileSystemService = fileSystemService ?? throw new ArgumentNullException(nameof(fileSystemService));
+        _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+        _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
+        _paginationViewModelFactory = paginationViewModelFactory ?? throw new ArgumentNullException(nameof(paginationViewModelFactory));
 
-        _monitor = new LogMonitor();
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
 
@@ -304,8 +312,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         OnPropertyChanged(nameof(IsFolderExists));
         UpdateCanSaveState();
-
-        _logRepository = new LogRepository();
 
         ViewHistoryCommand = new RelayCommand(async () => await ViewHistoryAsync().ConfigureAwait(false));
 
@@ -451,7 +457,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void InitializeDatabaseMode()
     {
-        PaginationViewModel = new PaginationViewModel(_logRepository);
+        PaginationViewModel = _paginationViewModelFactory(_logRepository);
         _ = LoadSessionsAsync();
         _ = PaginationViewModel.LoadLogsAsync();
     }
@@ -1043,7 +1049,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 _folderWatcher.EnableRaisingEvents = false;
                 _folderWatcher.Dispose();
 
-                _monitor.Dispose();
+                if (_monitor is IDisposable disposableMonitor)
+                {
+                    disposableMonitor.Dispose();
+                }
             }
             catch (ObjectDisposedException ex)
             {

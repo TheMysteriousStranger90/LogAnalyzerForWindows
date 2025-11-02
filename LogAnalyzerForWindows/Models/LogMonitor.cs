@@ -1,4 +1,5 @@
-﻿using LogAnalyzerForWindows.Interfaces;
+﻿using System.Diagnostics;
+using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 
 namespace LogAnalyzerForWindows.Models;
@@ -6,18 +7,17 @@ namespace LogAnalyzerForWindows.Models;
 internal sealed class LogMonitor : ILogMonitor, IDisposable
 {
     private HashSet<LogEntry> _lastProcessedLogs = [];
-
-    public event EventHandler<LogsChangedEventArgs>? LogsChanged;
-    public event EventHandler? MonitoringStarted;
-    public event EventHandler? MonitoringStopped;
-
     private CancellationTokenSource? _cts;
     private volatile bool _isMonitoring;
     private bool _disposedValue;
 
     public bool IsMonitoring => _isMonitoring;
 
-        public void Monitor(ILogReader reader)
+    public event EventHandler<LogsChangedEventArgs>? LogsChanged;
+    public event EventHandler? MonitoringStarted;
+    public event EventHandler? MonitoringStopped;
+
+    public void Monitor(ILogReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
 
@@ -42,13 +42,13 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
                     }
                     catch (IOException ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
+                        Debug.WriteLine($"Error reading logs: {ex.Message}");
                         Thread.Sleep(5000);
                         continue;
                     }
                     catch (UnauthorizedAccessException ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error reading logs: {ex.Message}");
+                        Debug.WriteLine($"Error reading logs: {ex.Message}");
                         Thread.Sleep(5000);
                         continue;
                     }
@@ -109,13 +109,12 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
     }
 }
 
-
 internal sealed class LogsChangedEventArgs : EventArgs
 {
     public IEnumerable<LogEntry> Logs { get; }
 
     public LogsChangedEventArgs(IEnumerable<LogEntry> logs)
     {
-        Logs = logs;
+        Logs = logs ?? throw new ArgumentNullException(nameof(logs));
     }
 }
