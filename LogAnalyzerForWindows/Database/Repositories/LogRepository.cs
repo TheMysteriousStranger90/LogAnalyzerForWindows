@@ -5,21 +5,30 @@ namespace LogAnalyzerForWindows.Database.Repositories;
 
 internal sealed class LogRepository : ILogRepository
 {
+    private readonly IDbContextFactory<LogAnalyzerDbContext> _contextFactory;
+
+    public LogRepository(IDbContextFactory<LogAnalyzerDbContext> contextFactory)
+    {
+        _contextFactory = contextFactory;
+    }
+
     public async Task<int> SaveLogsAsync(IEnumerable<LogEntry> logs, string sessionId)
     {
-        using var context = new LogAnalyzerDbContext();
-
-        var entities = logs.Select(log => new LogEntryEntity
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
         {
-            Timestamp = log.Timestamp,
-            Level = log.Level,
-            Message = log.Message,
-            CreatedAt = DateTime.UtcNow,
-            SessionId = sessionId
-        }).ToList();
+            var entities = logs.Select(log => new LogEntryEntity
+            {
+                Timestamp = log.Timestamp,
+                Level = log.Level,
+                Message = log.Message,
+                CreatedAt = DateTime.UtcNow,
+                SessionId = sessionId
+            }).ToList();
 
-        await context.LogEntries.AddRangeAsync(entities).ConfigureAwait(false);
-        return await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.LogEntries.AddRangeAsync(entities).ConfigureAwait(false);
+            return await context.SaveChangesAsync().ConfigureAwait(false);
+        }
     }
 
     public async Task<(List<LogEntry> Logs, int TotalCount)> GetLogsAsync(
@@ -30,92 +39,101 @@ internal sealed class LogRepository : ILogRepository
         DateTime? endDate = null,
         string? sessionId = null)
     {
-        using var context = new LogAnalyzerDbContext();
-
-        var query = context.LogEntries.AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(levelFilter))
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
         {
-            query = query.Where(e => e.Level == levelFilter);
+            var query = context.LogEntries.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(levelFilter))
+            {
+                query = query.Where(e => e.Level == levelFilter);
+            }
+
+            if (startDate.HasValue)
+            {
+                query = query.Where(e => e.Timestamp >= startDate.Value);
+            }
+
+            if (endDate.HasValue)
+            {
+                query = query.Where(e => e.Timestamp <= endDate.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(sessionId))
+            {
+                query = query.Where(e => e.SessionId == sessionId);
+            }
+
+            var totalCount = await query.CountAsync().ConfigureAwait(false);
+
+            var logs = await query
+                .OrderByDescending(e => e.Timestamp)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(e => new LogEntry
+                {
+                    Timestamp = e.Timestamp,
+                    Level = e.Level,
+                    Message = e.Message
+                })
+                .ToListAsync().ConfigureAwait(false);
+
+            return (logs, totalCount);
         }
-
-        if (startDate.HasValue)
-        {
-            query = query.Where(e => e.Timestamp >= startDate.Value);
-        }
-
-        if (endDate.HasValue)
-        {
-            query = query.Where(e => e.Timestamp <= endDate.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(sessionId))
-        {
-            query = query.Where(e => e.SessionId == sessionId);
-        }
-
-        var totalCount = await query.CountAsync().ConfigureAwait(false);
-
-        var entities = await query
-            .OrderByDescending(e => e.Timestamp)
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync().ConfigureAwait(false);
-
-        var logs = entities.Select(e => new LogEntry
-        {
-            Timestamp = e.Timestamp,
-            Level = e.Level,
-            Message = e.Message
-        }).ToList();
-
-        return (logs, totalCount);
     }
 
     public async Task<List<string>> GetSessionIdsAsync()
     {
-        using var context = new LogAnalyzerDbContext();
-
-        return await context.LogEntries
-            .Where(e => e.SessionId != null)
-            .Select(e => e.SessionId!)
-            .Distinct()
-            .OrderByDescending(s => s)
-            .ToListAsync().ConfigureAwait(false);
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            return await context.LogEntries
+                .AsNoTracking()
+                .Where(e => e.SessionId != null)
+                .Select(e => e.SessionId!)
+                .Distinct()
+                .OrderByDescending(s => s)
+                .ToListAsync().ConfigureAwait(false);
+        }
     }
 
     public async Task<int> DeleteOldLogsAsync(DateTime olderThan)
     {
-        using var context = new LogAnalyzerDbContext();
-
-        var oldLogs = context.LogEntries
-            .Where(e => e.CreatedAt < olderThan);
-
-        context.LogEntries.RemoveRange(oldLogs);
-        return await context.SaveChangesAsync().ConfigureAwait(false);
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            return await context.LogEntries
+                .Where(e => e.CreatedAt < olderThan)
+                .ExecuteDeleteAsync()
+                .ConfigureAwait(false);
+        }
     }
 
     public async Task<int> ClearAllLogsAsync()
     {
-        using var context = new LogAnalyzerDbContext();
-
-        return await context.Database.ExecuteSqlRawAsync("DELETE FROM LogEntries").ConfigureAwait(false);
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            return await context.Database.ExecuteSqlRawAsync("DELETE FROM LogEntries").ConfigureAwait(false);
+        }
     }
 
     public async Task<Dictionary<string, int>> GetLogStatisticsAsync(string? sessionId = null)
     {
-        using var context = new LogAnalyzerDbContext();
-
-        var query = context.LogEntries.AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(sessionId))
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
         {
-            query = query.Where(e => e.SessionId == sessionId);
-        }
+            var query = context.LogEntries.AsNoTracking();
 
-        return await query
-            .GroupBy(e => e.Level ?? "Unknown")
-            .Select(g => new { Level = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Level, x => x.Count).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(sessionId))
+            {
+                query = query.Where(e => e.SessionId == sessionId);
+            }
+
+            return await query
+                .GroupBy(e => e.Level ?? "Unknown")
+                .Select(g => new { Level = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Level, x => x.Count).ConfigureAwait(false);
+        }
     }
 }
