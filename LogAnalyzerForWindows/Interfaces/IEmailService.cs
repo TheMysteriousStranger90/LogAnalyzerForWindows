@@ -1,7 +1,13 @@
-﻿using System.Threading.Tasks;
+﻿namespace LogAnalyzerForWindows.Interfaces;
 
-namespace LogAnalyzerForWindows.Interfaces;
-
+/// <summary>
+/// Defines the contract for email service operations.
+/// </summary>
+/// <remarks>
+/// This interface provides functionality to send emails with optional file attachments.
+/// Implementations should handle SMTP configuration, authentication, and error scenarios
+/// such as network failures, invalid credentials, or missing configuration.
+/// </remarks>
 internal interface IEmailService
 {
     /// <summary>

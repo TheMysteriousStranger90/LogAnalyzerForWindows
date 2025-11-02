@@ -530,6 +530,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                     PaginationViewModel = null;
                 }
 
+                (StartCommand as RelayCommand)?.OnCanExecuteChanged();
+                (StopCommand as RelayCommand)?.OnCanExecuteChanged();
                 (ClearHistoryCommand as RelayCommand)?.OnCanExecuteChanged();
             }
         }
@@ -549,12 +551,13 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private bool CanStartMonitoring() =>
+        !UseDatabaseMode &&
         !string.IsNullOrEmpty(SelectedLogSource) &&
         !string.IsNullOrEmpty(SelectedLogLevel) &&
         !string.IsNullOrEmpty(SelectedTime) &&
         !_monitor.IsMonitoring;
 
-    private bool CanStopMonitoring() => _monitor.IsMonitoring;
+    private bool CanStopMonitoring() => !UseDatabaseMode && _monitor.IsMonitoring;
 
     [SupportedOSPlatform("windows")]
     private void StartMonitoring()

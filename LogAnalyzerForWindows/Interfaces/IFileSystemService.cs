@@ -1,5 +1,13 @@
 ﻿namespace LogAnalyzerForWindows.Interfaces;
 
+/// <summary>
+/// Defines the contract for file system operations.
+/// </summary>
+/// <remarks>
+/// This interface provides functionality for common file system operations such as
+/// opening folders in the system file explorer and creating archives of directories.
+/// Implementations should handle platform-specific behaviors and error scenarios.
+/// </remarks>
 internal interface IFileSystemService
 {
     /// <summary>
