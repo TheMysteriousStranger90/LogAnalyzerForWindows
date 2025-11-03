@@ -2,20 +2,58 @@
 
 ![Screenshot of the application](Screenshots/Screen1.png)
 
-This project is a log analyzer for Windows, which reads system logs, filters them based on the selected log level and time interval, and displays the results in a user-friendly format. The application also provides features to save the logs in different formats (txt, json), archive the logs, and send the logs via email.
+A Windows Event Log monitoring and analysis tool with real-time tracking, database storage, and advanced filtering capabilities.
 
 ## Features
 
-- Read system logs
-- Filter logs based on log level and time interval
-- Display logs in a user-friendly format
-- Save logs in txt or json format
-- Archive logs
-- Send logs via email
+### **Dual Operation Modes**
+- **Real-time Monitoring Mode**: Continuously monitor Windows Event Logs with automatic updates
+- **Database Mode**: View and analyze historical logs with pagination and session-based filtering
+
+### **Advanced Filtering**
+- Filter by log source (System, Application, etc.)
+- Filter by log level (Error, Warning, etc.)
+- Time-based filtering (Last hour, 24 hours, 3 days, 7 days)
+- Session-based filtering for historical data
+
+### **Data Management**
+- Save logs in multiple formats (TXT, JSON)
+- Persistent SQLite database for log history
+- Session tracking with unique identifiers
+
+### **Technical Features**
+- Asynchronous operations for responsive UI
+- Batch processing for large log volumes
+- Efficient memory management
+- Error handling and user feedback
+- FileSystemWatcher for folder monitoring
+- WMI (Windows Management Instrumentation) integration
 
 ## Requirements
 
-- The primary language of the operating system must be **English or Russian** for the application to work correctly.
+- **Operating System**: Windows (tested on Windows 11)
+- **System Language**: English or Russian (for proper event type detection)
+- **.NET**: .NET 9.0
+- **Administrator Rights**: Required for reading certain event logs (Security log)
+
+## Usage
+
+### Real-time Monitoring
+1. Select a **Log Source** (e.g., System, Application)
+2. Choose a **Log Level** to monitor (e.g., Error, Warning)
+3. Set a **Time Range** (e.g., Last 24 hours)
+4. Click **Start** to begin monitoring
+5. View logs in real-time in the output window
+6. Click **Stop** to end monitoring
+7. Click **Save Logs** to export the current session
+
+### Database Mode
+1. Toggle **Database Mode** to view historical logs
+2. Select a **Session** from the dropdown
+3. Navigate through pages using pagination controls
+4. Adjust **items per page** for comfortable viewing
+5. Click **Export Session** to save all logs from a session
+6. Use **Clear All History** to delete all stored logs
 
 ## Contributing
 
@@ -27,9 +65,7 @@ Bohdan Harabadzhyu
 
 ## License
 
-[MIT](https://choosealicense.com/licenses/mit/)
-
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## SourceForge
 
