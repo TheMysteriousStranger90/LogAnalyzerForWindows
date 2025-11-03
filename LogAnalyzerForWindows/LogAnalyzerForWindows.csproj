@@ -19,19 +19,61 @@
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
         <ApplicationIcon>./Assets/icon.ico</ApplicationIcon>
 
+        <!-- Version Info -->
         <AssemblyVersion>1.3.0.0</AssemblyVersion>
         <FileVersion>1.3.0.0</FileVersion>
         <InformationalVersion>1.3.0.0</InformationalVersion>
+
+        <!-- Product Info -->
         <Authors>Bohdan Harabadzhyu</Authors>
+        <Company>Bohdan Harabadzhyu</Company>
         <Product>Log Analyzer For Windows</Product>
-        <Description>A log analyzer for Windows application.</Description>
-        <Copyright>Copyright © Bohdan Harabadzhyu</Copyright>
+        <Description>A Windows Event Log monitoring and analysis tool with real-time tracking, database storage, and advanced filtering capabilities.</Description>
+        <Copyright>Copyright © 2023 Bohdan Harabadzhyu</Copyright>
+
+        <!-- Repository Info -->
         <RepositoryUrl>https://github.com/TheMysteriousStranger90/LogAnalyzerForWindows</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
+        <PackageProjectUrl>https://github.com/TheMysteriousStranger90/LogAnalyzerForWindows</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
 
+        <!-- Publishing Settings -->
+        <PublishSingleFile>true</PublishSingleFile>
+        <PublishTrimmed>true</PublishTrimmed>
+        <SelfContained>true</SelfContained>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+
+        <!-- Trimming Settings -->
+        <TrimMode>partial</TrimMode>
+        <InvariantGlobalization>false</InvariantGlobalization>
+        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+        <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+
+        <!-- Performance Optimizations -->
+        <TieredCompilation>true</TieredCompilation>
+        <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+        <ServerGarbageCollection>true</ServerGarbageCollection>
+
+        <!-- Debug Settings -->
+        <DebugType>embedded</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+
+        <!-- Package Management -->
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 
+        <!-- Warning Configuration -->
         <WarningsNotAsErrors>CA1416;CA1515;CA1812</WarningsNotAsErrors>
+    </PropertyGroup>
+
+    <!-- Release Configuration -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <Optimize>true</Optimize>
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
     </PropertyGroup>
 
     <ItemGroup>
@@ -45,8 +87,8 @@
         <PackageReference Include="Avalonia.ReactiveUI" />
         <PackageReference Include="MailKit" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
-          <PrivateAssets>all</PrivateAssets>
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
         <PackageReference Include="Microsoft.Extensions.Configuration" />
@@ -68,5 +110,13 @@
         <None Update=".env">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <!-- Trim Warnings Suppression for Known Safe Libraries -->
+    <ItemGroup>
+        <TrimmerRootAssembly Include="Avalonia" />
+        <TrimmerRootAssembly Include="Avalonia.Themes.Fluent" />
+        <TrimmerRootAssembly Include="System.Management" />
     </ItemGroup>
 </Project>
