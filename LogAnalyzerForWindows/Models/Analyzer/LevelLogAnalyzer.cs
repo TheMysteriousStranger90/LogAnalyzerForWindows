@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿namespace LogAnalyzerForWindows.Models.Analyzer;
 
-namespace LogAnalyzerForWindows.Models.Analyzer;
-
-public class LevelLogAnalyzer : LogAnalyzer
+internal sealed class LevelLogAnalyzer : LogAnalyzer
 {
     private readonly string _levelToAnalyze;
 
@@ -15,7 +11,7 @@ public class LevelLogAnalyzer : LogAnalyzer
             throw new ArgumentException("Level cannot be null or whitespace.", nameof(level));
         }
 
-        _levelToAnalyze = level.ToLowerInvariant();
+        _levelToAnalyze = level.ToUpperInvariant();
     }
 
     public override void Analyze(IEnumerable<LogEntry> logs)
@@ -26,7 +22,7 @@ public class LevelLogAnalyzer : LogAnalyzer
             return;
         }
 
-        int count = logs.Count(log => log?.Level?.ToLowerInvariant() == _levelToAnalyze);
+        int count = logs.Count(log => log?.Level?.ToUpperInvariant() == _levelToAnalyze);
 
         Console.WriteLine($"Number of {_levelToAnalyze} logs: {count}");
     }
@@ -38,6 +34,6 @@ public class LevelLogAnalyzer : LogAnalyzer
             return Enumerable.Empty<LogEntry>();
         }
 
-        return logs.Where(log => log?.Level?.ToLowerInvariant() == _levelToAnalyze);
+        return logs.Where(log => log?.Level?.ToUpperInvariant() == _levelToAnalyze);
     }
 }

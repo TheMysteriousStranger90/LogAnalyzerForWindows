@@ -1,10 +1,9 @@
-﻿using System;
-using LogAnalyzerForWindows.Formatter.Interfaces;
+﻿using LogAnalyzerForWindows.Formatter.Interfaces;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
 
 namespace LogAnalyzerForWindows.Models.Writer;
 
-public class TextBoxLogWriter : ILogWriter
+internal sealed class TextBoxLogWriter : ILogWriter
 {
     private readonly ILogFormatter _formatter;
     private readonly Action<string> _updateAction;
@@ -18,7 +17,7 @@ public class TextBoxLogWriter : ILogWriter
     public void Write(LogEntry log)
     {
         if (log == null) return;
-        
+
         string formattedLogString = _formatter.Format(log).ToString();
         _updateAction(formattedLogString);
     }

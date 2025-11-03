@@ -1,27 +1,34 @@
-using System;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
-using LogAnalyzerForWindows.ViewModels;
 
 namespace LogAnalyzerForWindows;
 
-public class ViewLocator : IDataTemplate
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Performance",
+    "CA1812:Avoid uninstantiated internal classes",
+    Justification = "This class is instantiated by Avalonia framework through XAML DataTemplate binding")]
+internal sealed class ViewLocator : IDataTemplate
 {
-    public Control Build(object data)
+    public Control? Build(object? data)
     {
-        var name = data.GetType().FullName!.Replace("ViewModel", "View");
+        ArgumentNullException.ThrowIfNull(data);
+
+        var name = data.GetType().FullName!
+            .Replace("ViewModel", "View", StringComparison.Ordinal);
+
         var type = Type.GetType(name);
 
-        if (type != null)
+        if (type is not null)
         {
-            return (Control)Activator.CreateInstance(type)!;
+            var control = (Control?)Activator.CreateInstance(type);
+            return control;
         }
 
-        return new TextBlock { Text = "Not Found: " + name };
+        return new TextBlock { Text = $"Not Found: {name}" };
     }
 
-    public bool Match(object data)
+    public bool Match(object? data)
     {
-        return data is ViewModelBase;
+        return data is ViewModels.MainWindowViewModel;
     }
 }

@@ -1,8 +1,6 @@
-﻿using System.Collections.Generic;
+﻿namespace LogAnalyzerForWindows.Models.Analyzer;
 
-namespace LogAnalyzerForWindows.Models.Analyzer;
-
-public abstract class LogAnalyzer
+internal abstract class LogAnalyzer
 {
     public abstract void Analyze(IEnumerable<LogEntry> logs);
 }

@@ -1,26 +1,20 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using LogAnalyzerForWindows.ViewModels;
-using System;
 
 namespace LogAnalyzerForWindows.Views;
 
-public partial class MainWindow : Window, IDisposable
+internal sealed partial class MainWindow : Window, IDisposable
 {
-    private MainWindowViewModel _viewModel;
     private bool _disposedValue;
 
     public MainWindow()
     {
         InitializeComponent();
-        _viewModel = new MainWindowViewModel();
-        DataContext = _viewModel;
-        
         Closing += MainWindow_Closing;
     }
 
-    private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+    private void MainWindow_Closing(object? sender, WindowClosingEventArgs e)
     {
         Dispose();
     }
@@ -30,13 +24,16 @@ public partial class MainWindow : Window, IDisposable
         AvaloniaXamlLoader.Load(this);
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (!_disposedValue)
         {
             if (disposing)
             {
-                _viewModel?.Dispose();
+                if (DataContext is MainWindowViewModel viewModel)
+                {
+                    viewModel.Dispose();
+                }
                 Closing -= MainWindow_Closing;
             }
 
