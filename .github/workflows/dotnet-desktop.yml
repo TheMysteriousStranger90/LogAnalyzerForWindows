@@ -137,20 +137,19 @@ jobs:
                   echo "version=$version" >> $env:GITHUB_OUTPUT
                   echo "Version: $version"
 
-            - name: Publish Self-Contained (win-x64)
-              run: |
-                  dotnet publish ${{ env.PROJECT_PATH }} `
-                    --configuration Release `
-                    --runtime win-x64 `
-                    --self-contained true `
-                    --output ./publish/win-x64 `
-                    /p:PublishSingleFile=true `
-                    /p:PublishTrimmed=true `
-                    /p:EnableCompressionInSingleFile=true `
-                    /p:IncludeNativeLibrariesForSelfExtract=true `
-                    /p:DebugType=embedded `
-                    /p:DebugSymbols=true `
-                    /p:Version=${{ steps.version.outputs.version }}
+            -   name: Publish Self-Contained (win-x64)
+                run: |
+                    dotnet publish ${{ env.PROJECT_PATH }} `
+                      --configuration Release `
+                      --runtime win-x64 `
+                      --self-contained true `
+                      --output ./publish/win-x64 `
+                      /p:PublishSingleFile=true `
+                      /p:EnableCompressionInSingleFile=true `
+                      /p:IncludeNativeLibrariesForSelfExtract=true `
+                      /p:DebugType=embedded `
+                      /p:DebugSymbols=true `
+                      /p:Version=${{ steps.version.outputs.version }}
 
             - name: List published files
               run: Get-ChildItem -Path ./publish/win-x64 -Recurse

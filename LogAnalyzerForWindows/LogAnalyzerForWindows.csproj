@@ -47,12 +47,6 @@
         <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
         <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 
-        <!-- Trimming Settings -->
-        <TrimMode>partial</TrimMode>
-        <InvariantGlobalization>false</InvariantGlobalization>
-        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-        <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
-
         <!-- Performance Optimizations -->
         <TieredCompilation>true</TieredCompilation>
         <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
