@@ -1,6 +1,6 @@
 ﻿<Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    
+
     <!-- Base Colors -->
     <Style>
         <Style.Resources>
@@ -126,5 +126,18 @@
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
+    <Style Selector="Button.accent">
+        <Setter Property="Background" Value="#0078D4"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="Button.accent:pointerover">
+        <Setter Property="Background" Value="#1084D8"/>
+    </Style>
+
+    <Style Selector="Button.accent:pressed">
+        <Setter Property="Background" Value="#006CBD"/>
     </Style>
 </Styles>

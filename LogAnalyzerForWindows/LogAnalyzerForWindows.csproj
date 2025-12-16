@@ -114,6 +114,7 @@
         <PackageReference Include="EPPlus" />
         <PackageReference Include="System.Management" />
         <PackageReference Include="DotNetEnv" />
+        <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     </ItemGroup>
 
     <ItemGroup>

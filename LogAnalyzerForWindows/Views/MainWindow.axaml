@@ -127,6 +127,20 @@
 
                     <Separator Margin="0,10,0,10" />
 
+                    <!-- Settings Section -->
+                    <TextBlock Text="Settings" FontWeight="Bold" FontSize="14" />
+
+                    <!-- Settings Button -->
+                    <Button Command="{Binding OpenSettingsCommand}" Margin="0,5,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="⚙️" FontSize="14"/>
+                            <TextBlock Text="Open Settings" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ToolTip.Tip>Configure SMTP, auto-start and other settings</ToolTip.Tip>
+                    </Button>
+
+                    <Separator Margin="0,10,0,10" />
+
                     <TextBlock Text="Email" FontWeight="Bold" FontSize="14" />
 
                     <!-- Email Input -->

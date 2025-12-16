@@ -1,0 +1,200 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LogAnalyzerForWindows.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="600"
+        x:Class="LogAnalyzerForWindows.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="500"
+        Height="650"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Icon="/Assets/icon.ico">
+
+    <Window.Styles>
+        <StyleInclude Source="/Styles/Styles.axaml" />
+    </Window.Styles>
+
+    <Grid RowDefinitions="*, Auto, Auto" Margin="20">
+        <!-- Settings Content -->
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="20">
+                <!-- SMTP Settings Section -->
+                <Border Background="#2D2D2D" CornerRadius="8" Padding="15">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="SMTP Configuration"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="#0078D4" />
+
+                        <Grid ColumnDefinitions="120, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto"
+                              RowSpacing="10" ColumnSpacing="10">
+
+                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                       Text="SMTP Server:"
+                                       VerticalAlignment="Center" />
+                            <TextBox Grid.Row="0" Grid.Column="1"
+                                     Text="{Binding SmtpServer}"
+                                     Watermark="smtp.gmail.com">
+                                <ToolTip.Tip>SMTP server address (e.g., smtp.gmail.com)</ToolTip.Tip>
+                            </TextBox>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0"
+                                       Text="Port:"
+                                       VerticalAlignment="Center" />
+                            <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                           Value="{Binding SmtpPort}"
+                                           Minimum="1"
+                                           Maximum="65535"
+                                           FormatString="0">
+                                <ToolTip.Tip>SMTP port (typically 587 for TLS, 465 for SSL)</ToolTip.Tip>
+                            </NumericUpDown>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0"
+                                       Text="From Email:"
+                                       VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1"
+                                     Text="{Binding FromEmail}"
+                                     Watermark="your-email@gmail.com">
+                                <ToolTip.Tip>Sender email address</ToolTip.Tip>
+                            </TextBox>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0"
+                                       Text="From Name:"
+                                       VerticalAlignment="Center" />
+                            <TextBox Grid.Row="3" Grid.Column="1"
+                                     Text="{Binding FromName}"
+                                     Watermark="Log Analyzer">
+                                <ToolTip.Tip>Sender display name (optional)</ToolTip.Tip>
+                            </TextBox>
+
+                            <TextBlock Grid.Row="4" Grid.Column="0"
+                                       Text="Password:"
+                                       VerticalAlignment="Center" />
+                            <TextBox Grid.Row="4" Grid.Column="1"
+                                     Text="{Binding Password}"
+                                     PasswordChar="●"
+                                     Watermark="App password or SMTP password">
+                                <ToolTip.Tip>SMTP password or app-specific password</ToolTip.Tip>
+                            </TextBox>
+
+                            <TextBlock Grid.Row="5" Grid.Column="0"
+                                       Text="Use TLS:"
+                                       VerticalAlignment="Center" />
+                            <CheckBox Grid.Row="5" Grid.Column="1"
+                                      IsChecked="{Binding UseTls}">
+                                <ToolTip.Tip>Enable TLS encryption for SMTP connection</ToolTip.Tip>
+                            </CheckBox>
+                        </Grid>
+
+                        <!-- SMTP Test Section -->
+                        <Separator Margin="0,10" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBox Text="{Binding TestEmail}"
+                                     Watermark="Test email address"
+                                     Width="250">
+                                <ToolTip.Tip>Email address to send test message</ToolTip.Tip>
+                            </TextBox>
+                            <Button Content="Send Test Email"
+                                    Command="{Binding TestSmtpCommand}"
+                                    IsEnabled="{Binding !IsTesting}">
+                                <ToolTip.Tip>Send a test email to verify SMTP settings</ToolTip.Tip>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- General Settings Section -->
+                <Border Background="#2D2D2D" CornerRadius="8" Padding="15">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="General Settings"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="#0078D4" />
+
+                        <CheckBox IsChecked="{Binding AutoStartWithWindows}"
+                                  Content="Start with Windows">
+                            <ToolTip.Tip>Automatically start the application when Windows starts</ToolTip.Tip>
+                        </CheckBox>
+
+                        <CheckBox IsChecked="{Binding MinimizeToTray}"
+                                  Content="Minimize to system tray">
+                            <ToolTip.Tip>Minimize to system tray instead of taskbar</ToolTip.Tip>
+                        </CheckBox>
+
+                        <CheckBox IsChecked="{Binding StartMinimized}"
+                                  Content="Start minimized"
+                                  IsEnabled="{Binding MinimizeToTray}">
+                            <ToolTip.Tip>Start the application minimized to tray</ToolTip.Tip>
+                        </CheckBox>
+                    </StackPanel>
+                </Border>
+
+                <!-- Info Section -->
+                <Border Background="#1E3A5F" CornerRadius="8" Padding="15">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Gmail Users"
+                                   FontWeight="Bold"
+                                   Foreground="#64B5F6" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="#B0BEC5"
+                                   FontSize="12">
+                            For Gmail, use an App Password instead of your regular password.
+                            Go to Google Account → Security → 2-Step Verification → App passwords.
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="1"
+                Background="#333333"
+                CornerRadius="4"
+                Padding="10"
+                Margin="0,15,0,10"
+                IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding StatusMessage}"
+                       Foreground="White"
+                       TextWrapping="Wrap"
+                       HorizontalAlignment="Center" />
+        </Border>
+
+        <!-- Action Buttons -->
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10">
+            <Button Content="Reset to Default"
+                    Command="{Binding ResetToDefaultCommand}"
+                    Width="120">
+                <ToolTip.Tip>Reset all settings to default values</ToolTip.Tip>
+            </Button>
+            <Button Content="Cancel"
+                    Click="OnCancelClick"
+                    Width="80">
+                <ToolTip.Tip>Close without saving</ToolTip.Tip>
+            </Button>
+            <Button Content="Save"
+                    Command="{Binding SaveCommand}"
+                    Width="80"
+                    Classes="accent">
+                <ToolTip.Tip>Save settings and close</ToolTip.Tip>
+            </Button>
+        </StackPanel>
+
+        <!-- Loading Overlay -->
+        <Border Grid.Row="0" Grid.RowSpan="3"
+                IsVisible="{Binding IsSaving}"
+                Background="#80000000"
+                CornerRadius="8"
+                ZIndex="100">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                <ProgressBar IsIndeterminate="True" Width="150" Height="4" />
+                <TextBlock Text="Saving..." Foreground="White" FontWeight="Bold" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

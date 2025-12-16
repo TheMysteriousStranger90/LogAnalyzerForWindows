@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using LogAnalyzerForWindows.Database;
@@ -31,17 +32,46 @@ internal sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var mainViewModel = _serviceProvider.GetRequiredService<MainWindowViewModel>();
+            var settingsService = _serviceProvider.GetRequiredService<ISettingsService>();
+            var trayService = _serviceProvider.GetRequiredService<ITrayIconService>();
 
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = mainViewModel
             };
+
+            trayService.Initialize(mainWindow);
+            trayService.ExitRequested += () => desktop.Shutdown();
+
+            var settings = settingsService.GetGeneralSettings();
+            if (settings.MinimizeToTray)
+            {
+                mainWindow.Closing += (sender, e) =>
+                {
+                    if (sender is Window window && !_isShuttingDown)
+                    {
+                        e.Cancel = true;
+                        trayService.MinimizeToTray();
+                    }
+                };
+            }
+
+            desktop.MainWindow = mainWindow;
+
+            if (settings.StartMinimized && settings.MinimizeToTray)
+            {
+                mainWindow.WindowState = WindowState.Minimized;
+                mainWindow.ShowInTaskbar = false;
+                trayService.MinimizeToTray();
+            }
 
             desktop.ShutdownRequested += OnShutdownRequested;
         }
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private bool _isShuttingDown;
 
     private static void ConfigureServices(IServiceCollection services)
     {
@@ -50,19 +80,24 @@ internal sealed class App : Application
             options.UseSqlite(DbContextConfig.ConnectionString);
         });
 
-        services.AddSingleton<ILogRepository, LogRepository>();
+        services.AddSingleton<ISettingsService, SettingsService>();
 
+        services.AddSingleton<ILogRepository, LogRepository>();
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<IFileSystemService, FileSystemService>();
         services.AddSingleton<ILogMonitor, LogMonitor>();
+        services.AddSingleton<ITrayIconService, TrayIconService>();
 
         services.AddTransient<MainWindowViewModel>();
+        services.AddTransient<SettingsViewModel>();
         services.AddTransient<Func<ILogRepository, PaginationViewModel>>(sp =>
             repository => new PaginationViewModel(repository));
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
+        _isShuttingDown = true;
+
         if (_serviceProvider is IDisposable disposable)
         {
             disposable.Dispose();

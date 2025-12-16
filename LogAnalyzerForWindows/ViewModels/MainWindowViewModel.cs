@@ -21,6 +21,7 @@ using LogAnalyzerForWindows.Models.Reader;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 using LogAnalyzerForWindows.Models.Writer;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
+using LogAnalyzerForWindows.Views;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
@@ -163,7 +164,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         get => _stopCommand;
         set => SetProperty(ref _stopCommand, value);
     }
-
+    private readonly ISettingsService _settingsService;
+    public ICommand OpenSettingsCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand OpenFolderCommand { get; }
     public ICommand ArchiveLatestFolderCommand { get; }
@@ -263,18 +265,21 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         IFileSystemService fileSystemService,
         ILogMonitor monitor,
         ILogRepository logRepository,
+        ISettingsService settingsService,
         Func<ILogRepository, PaginationViewModel> paginationViewModelFactory)
     {
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
         _fileSystemService = fileSystemService ?? throw new ArgumentNullException(nameof(fileSystemService));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _paginationViewModelFactory = paginationViewModelFactory ??
                                       throw new ArgumentNullException(nameof(paginationViewModelFactory));
 
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
 
+        OpenSettingsCommand = new RelayCommand(OpenSettings);
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
         SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
@@ -1010,6 +1015,18 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                !string.IsNullOrEmpty(SelectedSession) &&
                SelectedSession != "All Sessions" &&
                !string.IsNullOrEmpty(SelectedFormat);
+    }
+
+    private void OpenSettings()
+    {
+        var settingsVm = new SettingsViewModel(_settingsService, _emailService);
+        var settingsWindow = new SettingsWindow(settingsVm);
+
+        if (Avalonia.Application.Current?.ApplicationLifetime is
+            Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            settingsWindow.ShowDialog(desktop.MainWindow!);
+        }
     }
 
     private async Task ExportSessionLogsAsync()
