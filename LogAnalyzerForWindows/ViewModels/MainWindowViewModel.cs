@@ -28,6 +28,7 @@ namespace LogAnalyzerForWindows.ViewModels;
 internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IEmailService _emailService;
+    private readonly IDialogService _dialogService;
     private readonly IFileSystemService _fileSystemService;
     private readonly ILogMonitor _monitor;
     private readonly ILogRepository _logRepository;
@@ -266,6 +267,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         ILogMonitor monitor,
         ILogRepository logRepository,
         ISettingsService settingsService,
+        IDialogService dialogService,
         Func<ILogRepository, PaginationViewModel> paginationViewModelFactory)
     {
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
@@ -273,13 +275,14 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _paginationViewModelFactory = paginationViewModelFactory ??
                                       throw new ArgumentNullException(nameof(paginationViewModelFactory));
 
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
 
-        OpenSettingsCommand = new RelayCommand(OpenSettings);
+        OpenSettingsCommand = new RelayCommand(async () => await OpenSettingsAsync().ConfigureAwait(false));
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
         SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
@@ -1017,16 +1020,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                !string.IsNullOrEmpty(SelectedFormat);
     }
 
-    private void OpenSettings()
+    private async Task OpenSettingsAsync()
     {
         var settingsVm = new SettingsViewModel(_settingsService, _emailService);
-        var settingsWindow = new SettingsWindow(settingsVm);
-
-        if (Avalonia.Application.Current?.ApplicationLifetime is
-            Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            settingsWindow.ShowDialog(desktop.MainWindow!);
-        }
+        await _dialogService.ShowSettingsDialogAsync(settingsVm).ConfigureAwait(false);
     }
 
     private async Task ExportSessionLogsAsync()

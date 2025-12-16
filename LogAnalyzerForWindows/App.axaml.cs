@@ -81,6 +81,7 @@ internal sealed class App : Application
         });
 
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IDialogService, DialogService>();
 
         services.AddSingleton<ILogRepository, LogRepository>();
         services.AddSingleton<IEmailService, EmailService>();
