@@ -22,6 +22,8 @@ internal sealed class LogRepository : ILogRepository
                 Timestamp = log.Timestamp,
                 Level = log.Level,
                 Message = log.Message,
+                EventId = log.EventId,
+                Source = log.Source,
                 CreatedAt = DateTime.UtcNow,
                 SessionId = sessionId
             }).ToList();
@@ -37,7 +39,10 @@ internal sealed class LogRepository : ILogRepository
         string? levelFilter = null,
         DateTime? startDate = null,
         DateTime? endDate = null,
-        string? sessionId = null)
+        string? sessionId = null,
+        string? searchText = null,
+        int? eventIdFilter = null,
+        string? sourceFilter = null)
     {
         var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
         await using (context)
@@ -64,6 +69,22 @@ internal sealed class LogRepository : ILogRepository
                 query = query.Where(e => e.SessionId == sessionId);
             }
 
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var searchPattern = $"%{searchText}%";
+                query = query.Where(e => e.Message != null && EF.Functions.Like(e.Message, searchPattern));
+            }
+
+            if (eventIdFilter.HasValue)
+            {
+                query = query.Where(e => e.EventId == eventIdFilter.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(sourceFilter))
+            {
+                query = query.Where(e => e.Source == sourceFilter);
+            }
+
             var totalCount = await query.CountAsync().ConfigureAwait(false);
 
             var logs = await query
@@ -74,7 +95,9 @@ internal sealed class LogRepository : ILogRepository
                 {
                     Timestamp = e.Timestamp,
                     Level = e.Level,
-                    Message = e.Message
+                    Message = e.Message,
+                    EventId = e.EventId,
+                    Source = e.Source
                 })
                 .ToListAsync().ConfigureAwait(false);
 
@@ -93,6 +116,49 @@ internal sealed class LogRepository : ILogRepository
                 .Select(e => e.SessionId!)
                 .Distinct()
                 .OrderByDescending(s => s)
+                .ToListAsync().ConfigureAwait(false);
+        }
+    }
+
+    public async Task<List<string>> GetDistinctSourcesAsync(string? sessionId = null)
+    {
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            var query = context.LogEntries.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(sessionId))
+            {
+                query = query.Where(e => e.SessionId == sessionId);
+            }
+
+            return await query
+                .Where(e => e.Source != null)
+                .Select(e => e.Source!)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync().ConfigureAwait(false);
+        }
+    }
+
+    public async Task<List<int>> GetDistinctEventIdsAsync(string? sessionId = null, int maxCount = 100)
+    {
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            var query = context.LogEntries.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(sessionId))
+            {
+                query = query.Where(e => e.SessionId == sessionId);
+            }
+
+            return await query
+                .Where(e => e.EventId != null)
+                .Select(e => e.EventId!.Value)
+                .Distinct()
+                .OrderBy(id => id)
+                .Take(maxCount)
                 .ToListAsync().ConfigureAwait(false);
         }
     }

@@ -10,7 +10,7 @@ internal static class LogPathHelper
         }
 
         string baseDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string appDirectoryName = "LogAnalyzerForWindows";
+        string appDirectoryName = "AzioEventLogAnalyzer";
 
         string defaultPath = Path.Combine(baseDirectory, appDirectoryName);
         Directory.CreateDirectory(defaultPath);

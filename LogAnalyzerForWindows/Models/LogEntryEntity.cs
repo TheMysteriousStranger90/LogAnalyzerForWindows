@@ -6,6 +6,8 @@ internal sealed class LogEntryEntity
     public DateTime? Timestamp { get; set; }
     public string? Level { get; set; }
     public string? Message { get; set; }
+    public int? EventId { get; set; }
+    public string? Source { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? SessionId { get; set; }
 }

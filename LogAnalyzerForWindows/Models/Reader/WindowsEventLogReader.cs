@@ -123,7 +123,7 @@ internal sealed class WindowsEventLogReader : ILogReader
         };
     }
 
-    private static string MapEventTypeToLevelString(object eventTypeObj)
+    private static string MapEventTypeToLevelString(object? eventTypeObj)
     {
         if (eventTypeObj == null)
             return "Unknown";
@@ -189,7 +189,7 @@ internal sealed class WindowsEventLogReader : ILogReader
         }
 
         string query =
-            $"SELECT TimeGenerated, Type, Message FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'{timeFilter}";
+            $"SELECT TimeGenerated, Type, Message, EventCode, SourceName FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'{timeFilter}";
 
         try
         {
@@ -219,11 +219,22 @@ internal sealed class WindowsEventLogReader : ILogReader
 
                         string textualLevel = MapEventTypeToLevelString(mo["Type"]);
 
+                        int? eventId = null;
+                        var eventCodeValue = mo["EventCode"];
+                        if (eventCodeValue != null && int.TryParse(eventCodeValue.ToString(), out int parsedEventId))
+                        {
+                            eventId = parsedEventId;
+                        }
+
+                        string? source = mo["SourceName"]?.ToString();
+
                         var logEntry = new LogEntry
                         {
                             Timestamp = timestamp,
                             Level = textualLevel,
-                            Message = mo["Message"]?.ToString()
+                            Message = mo["Message"]?.ToString(),
+                            EventId = eventId,
+                            Source = source
                         };
                         logs.Add(logEntry);
 
