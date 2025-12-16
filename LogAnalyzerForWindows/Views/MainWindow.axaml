@@ -133,8 +133,8 @@
                     <!-- Settings Button -->
                     <Button Command="{Binding OpenSettingsCommand}" Margin="0,5,0,0">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="⚙️" FontSize="14"/>
-                            <TextBlock Text="Open Settings" VerticalAlignment="Center"/>
+                            <Image Source="{SvgImage /Assets/settings.svg}" Height="16" Width="16" />
+                            <TextBlock Text="Open Settings" VerticalAlignment="Center" />
                         </StackPanel>
                         <ToolTip.Tip>Configure SMTP, auto-start and other settings</ToolTip.Tip>
                     </Button>
@@ -212,7 +212,8 @@
                                         MinWidth="80"
                                         ToolTip.Tip="Execute search">
                                     <Button.KeyBindings>
-                                        <KeyBinding Gesture="Enter" Command="{Binding PaginationViewModel.SearchCommand}" />
+                                        <KeyBinding Gesture="Enter"
+                                                    Command="{Binding PaginationViewModel.SearchCommand}" />
                                     </Button.KeyBindings>
                                 </Button>
                                 <Button Content="Clear Filters"
@@ -256,7 +257,7 @@
                                 <!-- Active Filters Indicator -->
                                 <TextBlock Text="⚡ Filters Active"
                                            VerticalAlignment="Center"
-                                           Foreground="#FFD700"
+                                           Foreground="#FFFFFF"
                                            FontWeight="Bold"
                                            IsVisible="{Binding PaginationViewModel.HasActiveFilters}"
                                            ToolTip.Tip="One or more filters are currently applied" />

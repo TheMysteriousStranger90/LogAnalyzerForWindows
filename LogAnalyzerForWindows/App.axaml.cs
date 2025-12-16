@@ -17,6 +17,7 @@ namespace LogAnalyzerForWindows;
 internal sealed class App : Application
 {
     private IServiceProvider? _serviceProvider;
+    private bool _isShuttingDown;
 
     public override void Initialize()
     {
@@ -58,6 +59,22 @@ internal sealed class App : Application
 
             desktop.MainWindow = mainWindow;
 
+            Program.SingleInstance?.StartListeningForActivation(() =>
+            {
+                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (desktop.MainWindow is { } window)
+                    {
+                        window.Show();
+                        window.ShowInTaskbar = true;
+                        window.WindowState = WindowState.Normal;
+                        window.Activate();
+
+                        trayService.RestoreFromTray();
+                    }
+                });
+            });
+
             if (settings.StartMinimized && settings.MinimizeToTray)
             {
                 mainWindow.WindowState = WindowState.Minimized;
@@ -70,8 +87,6 @@ internal sealed class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
-
-    private bool _isShuttingDown;
 
     private static void ConfigureServices(IServiceCollection services)
     {

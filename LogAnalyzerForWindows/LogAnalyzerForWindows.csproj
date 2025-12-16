@@ -70,7 +70,7 @@
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 
         <!-- Warning Configuration -->
-        <WarningsNotAsErrors>CA1062;CA1416;CA1515;CA1812</WarningsNotAsErrors>
+        <WarningsNotAsErrors>CA1031;CA1062;CA1416;CA1515;CA1812</WarningsNotAsErrors>
 
         <!-- Language Features -->
         <LangVersion>latest</LangVersion>

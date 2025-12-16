@@ -134,6 +134,17 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
         });
     }
 
+    public void RestoreFromTray()
+    {
+        if (_mainWindow is null) return;
+
+        _mainWindow.Show();
+        _mainWindow.ShowInTaskbar = true;
+        _mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
+        _mainWindow.Activate();
+    }
+
+
     public void ShowWindow()
     {
         if (_mainWindow is null) return;

@@ -8,6 +8,7 @@ internal interface ITrayIconService
     void ShowTrayIcon();
     void HideTrayIcon();
     void MinimizeToTray();
+    void RestoreFromTray();
     void ShowWindow();
     void UpdateToolTip(string text);
     event Action? ShowWindowRequested;
