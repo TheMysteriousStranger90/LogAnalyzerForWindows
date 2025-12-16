@@ -185,11 +185,6 @@ internal sealed class WindowsEventLogReader : ILogReader
         return "Other";
     }
 
-    public IEnumerable<LogEntry> ReadLogs()
-    {
-        return ReadLogsAsync().GetAwaiter().GetResult();
-    }
-
     public async Task<List<LogEntry>> ReadLogsAsync(CancellationToken cancellationToken = default)
     {
         return await Task.Run(() => ReadLogsInternal(cancellationToken), cancellationToken).ConfigureAwait(false);
