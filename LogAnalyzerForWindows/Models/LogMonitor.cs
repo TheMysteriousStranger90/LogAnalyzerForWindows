@@ -11,6 +11,9 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
     private volatile bool _isMonitoring;
     private bool _disposedValue;
 
+    private const int PollingIntervalMs = 1000;
+    private const int ErrorRetryDelayMs = 5000;
+
     public bool IsMonitoring => _isMonitoring;
 
     public event EventHandler<LogsChangedEventArgs>? LogsChanged;
@@ -24,61 +27,56 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
         if (_isMonitoring) return;
 
         _lastProcessedLogs = [];
-
         _cts = new CancellationTokenSource();
         _isMonitoring = true;
+
         MonitoringStarted?.Invoke(this, EventArgs.Empty);
 
-        Task.Run(() =>
-        {
-            try
-            {
-                while (!_cts.Token.IsCancellationRequested)
-                {
-                    List<LogEntry> currentLogs;
-                    try
-                    {
-                        currentLogs = reader.ReadLogs().ToList();
-                    }
-                    catch (IOException ex)
-                    {
-                        Debug.WriteLine($"Error reading logs: {ex.Message}");
-                        Thread.Sleep(5000);
-                        continue;
-                    }
-                    catch (UnauthorizedAccessException ex)
-                    {
-                        Debug.WriteLine($"Error reading logs: {ex.Message}");
-                        Thread.Sleep(5000);
-                        continue;
-                    }
+        _ = MonitorAsync(reader, _cts.Token);
+    }
 
-                    var newLogs = currentLogs;
-                    if (newLogs.Count > 0)
+    private async Task MonitorAsync(ILogReader reader, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var currentLogs = await reader.ReadLogsAsync(cancellationToken).ConfigureAwait(false);
+
+                    if (currentLogs.Count > 0)
                     {
-                        LogsChanged?.Invoke(this, new LogsChangedEventArgs(newLogs));
+                        var logsToProcess = currentLogs.ToList();
+                        _ = Task.Run(() => LogsChanged?.Invoke(this, new LogsChangedEventArgs(logsToProcess)), cancellationToken);
                         _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
                     }
-
-                    try
-                    {
-                        bool cancelled = _cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(1));
-                        if (cancelled || _cts.Token.IsCancellationRequested) break;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
                 }
+                catch (IOException ex)
+                {
+                    Debug.WriteLine($"Error reading logs: {ex.Message}");
+                    await Task.Delay(ErrorRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    Debug.WriteLine($"Error reading logs: {ex.Message}");
+                    await Task.Delay(ErrorRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                await Task.Delay(PollingIntervalMs, cancellationToken).ConfigureAwait(false);
             }
-            finally
-            {
-                _isMonitoring = false;
-                MonitoringStopped?.Invoke(this, EventArgs.Empty);
-                _cts?.Dispose();
-                _cts = null;
-            }
-        });
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal cancellation
+        }
+        finally
+        {
+            _isMonitoring = false;
+            MonitoringStopped?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public void StopMonitoring()
@@ -111,9 +109,9 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
 
 internal sealed class LogsChangedEventArgs : EventArgs
 {
-    public IEnumerable<LogEntry> Logs { get; }
+    public IReadOnlyList<LogEntry> Logs { get; }
 
-    public LogsChangedEventArgs(IEnumerable<LogEntry> logs)
+    public LogsChangedEventArgs(IReadOnlyList<LogEntry> logs)
     {
         Logs = logs ?? throw new ArgumentNullException(nameof(logs));
     }

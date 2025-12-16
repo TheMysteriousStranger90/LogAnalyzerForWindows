@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+﻿using System.Collections.Concurrent;
 using System.Management;
 using System.Runtime.Versioning;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
@@ -10,6 +10,7 @@ internal sealed class WindowsEventLogReader : ILogReader
 {
     private readonly string _logName;
     private DateTime? _lastReadTime;
+    private readonly object _lastReadTimeLock = new();
 
     public WindowsEventLogReader(string logName)
     {
@@ -19,6 +20,11 @@ internal sealed class WindowsEventLogReader : ILogReader
         }
 
         _logName = logName;
+    }
+
+    public static async Task<List<string>> GetAvailableLogNamesAsync(CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() => GetAvailableLogNames(), cancellationToken).ConfigureAwait(false);
     }
 
     public static List<string> GetAvailableLogNames()
@@ -45,7 +51,7 @@ internal sealed class WindowsEventLogReader : ILogReader
             catch (ManagementException ex)
             {
                 System.Diagnostics.Debug.WriteLine($"WMI table 'Win32_NTEventlogFile' not found: {ex.Message}");
-                return new List<string> { "System", "Application", "Security" };
+                return ["System", "Application", "Security"];
             }
         }
         catch (ManagementException ex)
@@ -59,11 +65,17 @@ internal sealed class WindowsEventLogReader : ILogReader
 
         if (logNames.Count == 0)
         {
-            var defaultLogNames = new[] { "System", "Application", "Security" };
-            logNames.AddRange(defaultLogNames);
+            logNames.AddRange(["System", "Application", "Security"]);
         }
 
         return logNames.OrderBy(x => x).ToList();
+    }
+
+    public static async Task<List<string>> GetAvailableLevelsForLogAsync(
+        string logName,
+        CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() => GetAvailableLevelsForLog(logName), cancellationToken).ConfigureAwait(false);
     }
 
     public static List<string> GetAvailableLevelsForLog(string logName)
@@ -106,8 +118,8 @@ internal sealed class WindowsEventLogReader : ILogReader
     private static List<string> GetDefaultLevelsForLog(string logName)
     {
         return logName.Equals("Security", StringComparison.OrdinalIgnoreCase)
-            ? new List<string> { "AuditSuccess", "AuditFailure" }
-            : new List<string> { "Error", "Warning", "Information" };
+            ? ["AuditSuccess", "AuditFailure"]
+            : ["Error", "Warning", "Information"];
     }
 
     private static int GetLevelPriority(string level)
@@ -130,46 +142,43 @@ internal sealed class WindowsEventLogReader : ILogReader
 
         string? eventTypeStr = eventTypeObj.ToString();
 
-        switch (eventTypeStr)
+        return eventTypeStr switch
         {
             // Russian
-            case "Ошибка":
-                return "Error";
-            case "Предупреждение":
-                return "Warning";
-            case "Информация":
-                return "Information";
-            case "Успешный аудит":
-            case "Успех аудита":
-                return "AuditSuccess";
-            case "Ошибка аудита":
-            case "Отказ аудита":
-                return "AuditFailure";
+            "Ошибка" => "Error",
+            "Предупреждение" => "Warning",
+            "Информация" => "Information",
+            "Успешный аудит" or "Успех аудита" => "AuditSuccess",
+            "Ошибка аудита" or "Отказ аудита" => "AuditFailure",
             // English
-            case "Error":
-                return "Error";
-            case "Warning":
-                return "Warning";
-            case "Information":
-                return "Information";
-            case "Audit Success":
-            case "Success Audit":
-                return "AuditSuccess";
-            case "Audit Failure":
-            case "Failure Audit":
-                return "AuditFailure";
-        }
+            "Error" => "Error",
+            "Warning" => "Warning",
+            "Information" => "Information",
+            "Audit Success" or "Success Audit" => "AuditSuccess",
+            "Audit Failure" or "Failure Audit" => "AuditFailure",
+            // Numeric
+            "1" => "Error",
+            "2" => "Warning",
+            "3" => "Information",
+            "4" => "AuditSuccess",
+            "5" => "AuditFailure",
+            _ => ParseNumericEventType(eventTypeStr)
+        };
+    }
 
+    private static string ParseNumericEventType(string? eventTypeStr)
+    {
         if (ushort.TryParse(eventTypeStr, out ushort eventTypeNumeric))
         {
-            switch (eventTypeNumeric)
+            return eventTypeNumeric switch
             {
-                case 1: return "Error";
-                case 2: return "Warning";
-                case 3: return "Information";
-                case 4: return "AuditSuccess";
-                case 5: return "AuditFailure";
-            }
+                1 => "Error",
+                2 => "Warning",
+                3 => "Information",
+                4 => "AuditSuccess",
+                5 => "AuditFailure",
+                _ => "Other"
+            };
         }
 
         System.Diagnostics.Debug.WriteLine($"Unknown event type: {eventTypeStr}");
@@ -178,68 +187,84 @@ internal sealed class WindowsEventLogReader : ILogReader
 
     public IEnumerable<LogEntry> ReadLogs()
     {
-        var logs = new List<LogEntry>();
+        return ReadLogsAsync().GetAwaiter().GetResult();
+    }
 
-        string timeFilter = "";
-        if (_lastReadTime.HasValue)
+    public async Task<List<LogEntry>> ReadLogsAsync(CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() => ReadLogsInternal(cancellationToken), cancellationToken).ConfigureAwait(false);
+    }
+
+    private List<LogEntry> ReadLogsInternal(CancellationToken cancellationToken)
+    {
+        var logs = new ConcurrentBag<LogEntry>();
+
+        string timeFilter;
+        lock (_lastReadTimeLock)
         {
-            string wmiTime = _lastReadTime.Value.ToUniversalTime()
-                .ToString("yyyyMMddHHmmss.000000+000", CultureInfo.InvariantCulture);
-            timeFilter = $" AND TimeGenerated > '{wmiTime}'";
+            timeFilter = _lastReadTime.HasValue
+                ? $" AND TimeGenerated > '{_lastReadTime.Value.ToUniversalTime():yyyyMMddHHmmss}.000000+000'"
+                : "";
         }
 
         string query =
             $"SELECT TimeGenerated, Type, Message, EventCode, SourceName FROM Win32_NTLogEvent WHERE Logfile = '{_logName}'{timeFilter}";
 
+        DateTime? maxTimestamp = null;
+        var maxTimestampLock = new object();
+
         try
         {
-            using (var searcher = new ManagementObjectSearcher(query))
-            {
-                foreach (ManagementBaseObject moBase in searcher.Get())
+            using var searcher = new ManagementObjectSearcher(query);
+            var managementObjects = searcher.Get().Cast<ManagementObject>().ToList();
+
+            Parallel.ForEach(
+                managementObjects,
+                new ParallelOptions
                 {
-                    using (ManagementObject mo = (ManagementObject)moBase)
+                    MaxDegreeOfParallelism = Environment.ProcessorCount,
+                    CancellationToken = cancellationToken
+                },
+                moBase =>
+                {
+                    using ManagementObject mo = moBase;
+
+                    DateTime? timestamp = ParseTimestamp(mo["TimeGenerated"]);
+                    string textualLevel = MapEventTypeToLevelString(mo["Type"]);
+                    int? eventId = ParseEventId(mo["EventCode"]);
+                    string? source = mo["SourceName"]?.ToString();
+
+                    var logEntry = new LogEntry
                     {
-                        DateTime? timestamp = null;
-                        var timeGeneratedValue = mo["TimeGenerated"];
-                        if (timeGeneratedValue != null)
+                        Timestamp = timestamp,
+                        Level = textualLevel,
+                        Message = mo["Message"]?.ToString(),
+                        EventId = eventId,
+                        Source = source
+                    };
+
+                    logs.Add(logEntry);
+
+                    if (timestamp.HasValue)
+                    {
+                        lock (maxTimestampLock)
                         {
-                            try
+                            if (!maxTimestamp.HasValue || timestamp > maxTimestamp)
                             {
-                                timestamp = ManagementDateTimeConverter.ToDateTime(timeGeneratedValue.ToString());
-                            }
-                            catch (FormatException)
-                            {
-                                timestamp = DateTime.MinValue;
+                                maxTimestamp = timestamp;
                             }
                         }
-                        else
-                        {
-                            timestamp = DateTime.MinValue;
-                        }
+                    }
+                });
 
-                        string textualLevel = MapEventTypeToLevelString(mo["Type"]);
-
-                        int? eventId = null;
-                        var eventCodeValue = mo["EventCode"];
-                        if (eventCodeValue != null && int.TryParse(eventCodeValue.ToString(), out int parsedEventId))
-                        {
-                            eventId = parsedEventId;
-                        }
-
-                        string? source = mo["SourceName"]?.ToString();
-
-                        var logEntry = new LogEntry
-                        {
-                            Timestamp = timestamp,
-                            Level = textualLevel,
-                            Message = mo["Message"]?.ToString(),
-                            EventId = eventId,
-                            Source = source
-                        };
-                        logs.Add(logEntry);
-
-                        if (timestamp.HasValue && (!_lastReadTime.HasValue || timestamp > _lastReadTime))
-                            _lastReadTime = timestamp;
+            // Update last read time
+            if (maxTimestamp.HasValue)
+            {
+                lock (_lastReadTimeLock)
+                {
+                    if (!_lastReadTime.HasValue || maxTimestamp > _lastReadTime)
+                    {
+                        _lastReadTime = maxTimestamp;
                     }
                 }
             }
@@ -253,6 +278,31 @@ internal sealed class WindowsEventLogReader : ILogReader
             System.Diagnostics.Debug.WriteLine($"Access denied for log '{_logName}': {ex.Message}");
         }
 
-        return logs;
+        return logs.ToList();
+    }
+
+    private static DateTime? ParseTimestamp(object? timeGeneratedValue)
+    {
+        if (timeGeneratedValue == null)
+            return DateTime.MinValue;
+
+        try
+        {
+            return ManagementDateTimeConverter.ToDateTime(timeGeneratedValue.ToString());
+        }
+        catch (FormatException)
+        {
+            return DateTime.MinValue;
+        }
+    }
+
+    private static int? ParseEventId(object? eventCodeValue)
+    {
+        if (eventCodeValue != null && int.TryParse(eventCodeValue.ToString(), out int parsedEventId))
+        {
+            return parsedEventId;
+        }
+
+        return null;
     }
 }

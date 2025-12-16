@@ -165,6 +165,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         get => _stopCommand;
         set => SetProperty(ref _stopCommand, value);
     }
+
     private readonly ISettingsService _settingsService;
     public ICommand OpenSettingsCommand { get; }
     public ICommand SaveCommand { get; }
@@ -343,114 +344,92 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     }
 
     [SupportedOSPlatform("windows")]
-    private void LoadAvailableLogSources()
+    private async void LoadAvailableLogSources()
     {
-        Task.Run(() =>
+        try
         {
-            try
-            {
-                var sources = WindowsEventLogReader.GetAvailableLogNames();
+            var sources = await WindowsEventLogReader.GetAvailableLogNamesAsync().ConfigureAwait(false);
 
-                Dispatcher.UIThread.InvokeAsync(() =>
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LogSources.Clear();
+                foreach (var source in sources)
                 {
-                    LogSources.Clear();
-                    foreach (var source in sources)
-                    {
-                        LogSources.Add(source);
-                    }
+                    LogSources.Add(source);
+                }
 
-                    if (LogSources.Contains("System"))
-                    {
-                        SelectedLogSource = "System";
-                    }
-                    else if (LogSources.Count > 0)
-                    {
-                        SelectedLogSource = LogSources[0];
-                    }
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                Debug.WriteLine($"Invalid operation while loading log sources: {ex.Message}");
-            }
-            catch (IOException ex)
-            {
-                Debug.WriteLine($"IO error while loading log sources: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Unexpected error loading log sources: {ex.Message}");
-                throw;
-            }
-        });
+                if (LogSources.Contains("System"))
+                {
+                    SelectedLogSource = "System";
+                }
+                else if (LogSources.Count > 0)
+                {
+                    SelectedLogSource = LogSources[0];
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Invalid operation while loading log sources: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error while loading log sources: {ex.Message}");
+        }
     }
 
     [SupportedOSPlatform("windows")]
-    private void LoadAvailableLevelsForSource()
+    private async void LoadAvailableLevelsForSource()
     {
         if (string.IsNullOrEmpty(SelectedLogSource))
         {
             return;
         }
 
-        TextBlock = $"Loading available levels for {SelectedLogSource}...";
-        IsLoading = true;
-
-        Task.Run(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            try
-            {
-                var levels = WindowsEventLogReader.GetAvailableLevelsForLog(SelectedLogSource);
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var previousSelection = SelectedLogLevel;
-
-                    LogLevels.Clear();
-                    foreach (var level in levels)
-                    {
-                        LogLevels.Add(level);
-                    }
-
-                    if (!string.IsNullOrEmpty(previousSelection) && LogLevels.Contains(previousSelection))
-                    {
-                        SelectedLogLevel = previousSelection;
-                    }
-                    else if (LogLevels.Count > 0)
-                    {
-                        SelectedLogLevel = LogLevels[0];
-                    }
-
-                    TextBlock = $"Available levels loaded for {SelectedLogSource}";
-                    IsLoading = false;
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                Debug.WriteLine($"Invalid operation while loading levels for {SelectedLogSource}: {ex.Message}");
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"Error loading levels: {ex.Message}";
-                    IsLoading = false;
-                });
-            }
-            catch (IOException ex)
-            {
-                Debug.WriteLine($"IO error while loading levels for {SelectedLogSource}: {ex.Message}");
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"Error loading levels: {ex.Message}";
-                    IsLoading = false;
-                });
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Unexpected error loading levels for {SelectedLogSource}: {ex.Message}");
-                throw;
-            }
+            TextBlock = $"Loading available levels for {SelectedLogSource}...";
+            IsLoading = true;
         });
+
+        try
+        {
+            var levels = await WindowsEventLogReader.GetAvailableLevelsForLogAsync(SelectedLogSource)
+                .ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var previousSelection = SelectedLogLevel;
+
+                LogLevels.Clear();
+                foreach (var level in levels)
+                {
+                    LogLevels.Add(level);
+                }
+
+                if (!string.IsNullOrEmpty(previousSelection) && LogLevels.Contains(previousSelection))
+                {
+                    SelectedLogLevel = previousSelection;
+                }
+                else if (LogLevels.Count > 0)
+                {
+                    SelectedLogLevel = LogLevels[0];
+                }
+
+                TextBlock = $"Available levels loaded for {SelectedLogSource}";
+                IsLoading = false;
+            });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            Debug.WriteLine($"Error loading levels for {SelectedLogSource}: {ex.Message}");
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                TextBlock = $"Error loading levels: {ex.Message}";
+                IsLoading = false;
+            });
+        }
     }
 
     private static async void InitializeDatabaseAsync()
