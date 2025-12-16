@@ -113,7 +113,6 @@
         <PackageReference Include="MimeKit" />
         <PackageReference Include="EPPlus" />
         <PackageReference Include="System.Management" />
-        <PackageReference Include="DotNetEnv" />
         <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     </ItemGroup>
 
@@ -123,9 +122,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update=".env">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
         <None Include="..\README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 </Project>
