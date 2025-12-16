@@ -149,7 +149,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private static string DefaultLogFolderPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "AzioEventLogAnalyzer");
 
     public static bool IsFolderExists => Directory.Exists(DefaultLogFolderPath);
 
@@ -291,7 +291,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         );
 
         var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        var logPath = Path.Combine(documentsPath, "LogAnalyzerForWindows");
+        var logPath = Path.Combine(documentsPath, "AzioEventLogAnalyzer");
 
         if (!Directory.Exists(logPath))
         {
@@ -300,7 +300,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         _folderWatcher = new FileSystemWatcher(documentsPath)
         {
-            Filter = "LogAnalyzerForWindows",
+            Filter = "AzioEventLogAnalyzer",
             NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName,
             IncludeSubdirectories = true
         };
@@ -931,7 +931,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             await _emailService.SendEmailAsync(
                 "Log Analysis Recipient",
                 UserEmail,
-                "Log Analyzer For Windows - Logs",
+                "AzioEventLogAnalyzer - Logs",
                 $"Please find the latest log archive attached ({Path.GetFileName(latestZipFile)}).",
                 latestZipFile).ConfigureAwait(false);
 
