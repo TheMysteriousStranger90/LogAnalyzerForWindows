@@ -57,17 +57,10 @@ AzioEventLog Analyzer is a monitoring and analysis tool with real-time tracking,
 - **.NET**: .NET 9.0
 - **Administrator Rights**: Required for reading certain event logs (Security log)
 
-## Language Support
-
-The application supports Windows Event Log type detection for:
-
-| Language | Supported Event Types |
-|----------|----------------------|
-| **English** | Error, Warning, Information, Audit Success, Audit Failure |
-| **Russian** | Ошибка, Предупреждение, Информация, Успешный аудит, Ошибка аудита |
-| **Numeric** | 1 (Error), 2 (Warning), 3 (Information), 4 (AuditSuccess), 5 (AuditFailure) |
-
-> **Note**: For other languages, the application falls back to numeric event type codes, which are universal across all Windows installations.
+![Screenshot of the application](Screenshots/Screen2.png)
+![Screenshot of the application](Screenshots/Screen3.png)
+![Screenshot of the application](Screenshots/Screen4.png)
+![Screenshot of the application](Screenshots/Screen5.png)
 
 ## Usage
 
