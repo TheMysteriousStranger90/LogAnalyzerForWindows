@@ -7,7 +7,7 @@ AzioEventLog Analyzer is a monitoring and analysis tool for Windows Event Logs w
 ## Features
 
 ### **Dual Operation Modes**
-- **Real-time Monitoring Mode**: Continuously monitor Windows Event Logs with automatic updates
+- **Real-time Monitoring Mode**: Continuously monitor Windows Event Logs
 - **Database Mode**: View and analyze historical logs with pagination and session-based filtering
 
 ### **Interactive Dashboard**
@@ -40,7 +40,7 @@ AzioEventLog Analyzer is a monitoring and analysis tool for Windows Event Logs w
 - Archive latest logs folder to ZIP
 
 ### **Technical Features**
-- Built with Avalonia UI for cross-platform compatibility
+- Built with Avalonia UI
 - LiveChartsCore for interactive data visualization
 - Batch processing for large log volumes
 - Efficient memory management with pagination
@@ -50,8 +50,7 @@ AzioEventLog Analyzer is a monitoring and analysis tool for Windows Event Logs w
 
 ## Requirements
 
-- **Operating System**: Windows (tested on Windows 10/11)
-- **System Language**: English, Russian, or any language with numeric event types
+- **Operating System**: Windows (tested on Windows 11)
 - **.NET**: .NET 9.0
 - **Administrator Rights**: Required for reading certain event logs (Security log)
 
