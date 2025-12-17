@@ -42,6 +42,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private ICommand? _stopCommand;
     private ICommand? _sendEmailCommand;
     private EventHandler<LogsChangedEventArgs>? _onLogsChangedHandler;
+    public bool IsMonitoring => _monitor.IsMonitoring;
 
     private readonly HashSet<LogEntry> _processedLogs = [];
     private CancellationTokenSource? _processingCts;
@@ -989,6 +990,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             (StopCommand as RelayCommand)?.OnCanExecuteChanged();
 
             OnPropertyChanged(nameof(CanToggleDatabaseMode));
+            OnPropertyChanged(nameof(IsMonitoring));
 
             if (_monitor.IsMonitoring)
             {

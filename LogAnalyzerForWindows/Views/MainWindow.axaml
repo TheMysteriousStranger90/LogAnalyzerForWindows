@@ -19,9 +19,9 @@
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto, *">
+    <Grid RowDefinitions="Auto, Auto, *">
         <!-- Tab Control for switching between views -->
-        <TabControl Grid.Row="1" Margin="5">
+        <TabControl Grid.Row="2" Margin="5">
             <TabControl.Styles>
                 <Style Selector="TabItem">
                     <Setter Property="FontSize" Value="14"/>
@@ -292,14 +292,72 @@
                         </Grid>
                     </Grid>
 
-                    <!-- Status Bar -->
-                    <Border Grid.Row="2" Background="#333333" Padding="10" Margin="10,5,10,5" CornerRadius="3">
-                        <TextBlock Foreground="White"
-                                   FontSize="12"
-                                   TextAlignment="Center"
-                                   Text="{Binding TextBlock}"
-                                   TextWrapping="Wrap" />
-                    </Border>
+                    <!-- Status Bar with Monitoring Indicator -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="3"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="3"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Monitoring Indicator Line (Top) -->
+                        <Border Grid.Row="0"
+                                Background="#31A8FF"
+                                Margin="10,5,10,0"
+                                IsVisible="{Binding IsMonitoring}">
+                            <Border.Styles>
+                                <Style Selector="Border">
+                                    <Style.Animations>
+                                        <Animation Duration="0:0:2" IterationCount="Infinite">
+                                            <KeyFrame Cue="0%">
+                                                <Setter Property="Opacity" Value="0.5"/>
+                                            </KeyFrame>
+                                            <KeyFrame Cue="50%">
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </KeyFrame>
+                                            <KeyFrame Cue="100%">
+                                                <Setter Property="Opacity" Value="0.5"/>
+                                            </KeyFrame>
+                                        </Animation>
+                                    </Style.Animations>
+                                </Style>
+                            </Border.Styles>
+                        </Border>
+
+                        <!-- Status Bar -->
+                        <Border Grid.Row="1" Background="#333333" Padding="10" Margin="10,0,10,0" CornerRadius="3">
+                            <TextBlock Foreground="White"
+                                       FontSize="12"
+                                       TextAlignment="Center"
+                                       Text="{Binding TextBlock}"
+                                       TextWrapping="Wrap" />
+                        </Border>
+
+                        <!-- Monitoring Indicator Line (Bottom) -->
+                        <Border Grid.Row="2"
+                                Height="3"
+                                Background="#31A8FF"
+                                Margin="10,0,10,5"
+                                IsVisible="{Binding IsMonitoring}">
+                            <Border.Styles>
+                                <Style Selector="Border">
+                                    <Style.Animations>
+                                        <Animation Duration="0:0:2" IterationCount="Infinite">
+                                            <KeyFrame Cue="0%">
+                                                <Setter Property="Opacity" Value="0.5"/>
+                                            </KeyFrame>
+                                            <KeyFrame Cue="50%">
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </KeyFrame>
+                                            <KeyFrame Cue="100%">
+                                                <Setter Property="Opacity" Value="0.5"/>
+                                            </KeyFrame>
+                                        </Animation>
+                                    </Style.Animations>
+                                </Style>
+                            </Border.Styles>
+                        </Border>
+                    </Grid>
 
                     <!-- Control Buttons -->
                     <StackPanel Grid.Row="3" Orientation="Horizontal"
