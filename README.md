@@ -2,7 +2,7 @@
 
 ![Screenshot of the application](Screenshots/Screen1.png)
 
-AzioEventLog Analyzer is a monitoring and analysis tool with real-time tracking, database storage, advanced filtering capabilities, and interactive dashboard visualization.
+AzioEventLog Analyzer is a monitoring and analysis tool for Windows Event Logs with real-time tracking, database storage, advanced filtering capabilities, and interactive dashboard visualization.
 
 ## Features
 
@@ -42,11 +42,9 @@ AzioEventLog Analyzer is a monitoring and analysis tool with real-time tracking,
 ### **Technical Features**
 - Built with Avalonia UI for cross-platform compatibility
 - LiveChartsCore for interactive data visualization
-- Asynchronous operations for responsive UI
 - Batch processing for large log volumes
 - Efficient memory management with pagination
 - Error handling and user feedback
-- FileSystemWatcher for folder monitoring
 - WMI (Windows Management Instrumentation) integration
 - Entity Framework Core with SQLite
 
