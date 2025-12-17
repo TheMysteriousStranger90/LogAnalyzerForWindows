@@ -5,12 +5,12 @@ using Avalonia.Markup.Xaml;
 using LogAnalyzerForWindows.Database;
 using LogAnalyzerForWindows.Database.Repositories;
 using LogAnalyzerForWindows.Interfaces;
+using LogAnalyzerForWindows.Models;
 using LogAnalyzerForWindows.Services;
 using LogAnalyzerForWindows.ViewModels;
 using LogAnalyzerForWindows.Views;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using LogAnalyzerForWindows.Models;
 
 namespace LogAnalyzerForWindows;
 
@@ -35,21 +35,29 @@ internal sealed class App : Application
             var mainViewModel = _serviceProvider.GetRequiredService<MainWindowViewModel>();
             var settingsService = _serviceProvider.GetRequiredService<ISettingsService>();
             var trayService = _serviceProvider.GetRequiredService<ITrayIconService>();
+            var settings = settingsService.GetGeneralSettings();
 
             var mainWindow = new MainWindow
             {
                 DataContext = mainViewModel
             };
 
-            trayService.Initialize(mainWindow);
-            trayService.ExitRequested += () => desktop.Shutdown();
+            mainWindow.Width = 1200;
+            mainWindow.Height = 800;
+            mainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-            var settings = settingsService.GetGeneralSettings();
+            trayService.Initialize(mainWindow);
+            trayService.ExitRequested += () =>
+            {
+                _isShuttingDown = true;
+                desktop.Shutdown();
+            };
+
             if (settings.MinimizeToTray)
             {
                 mainWindow.Closing += (sender, e) =>
                 {
-                    if (sender is Window window && !_isShuttingDown)
+                    if (sender is Window && !_isShuttingDown)
                     {
                         e.Cancel = true;
                         trayService.MinimizeToTray();
@@ -61,25 +69,20 @@ internal sealed class App : Application
 
             Program.SingleInstance?.StartListeningForActivation(() =>
             {
-                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    if (desktop.MainWindow is { } window)
-                    {
-                        window.Show();
-                        window.ShowInTaskbar = true;
-                        window.WindowState = WindowState.Normal;
-                        window.Activate();
-
-                        trayService.RestoreFromTray();
-                    }
-                });
+                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { trayService.ShowWindow(); });
             });
 
             if (settings.StartMinimized && settings.MinimizeToTray)
             {
-                mainWindow.WindowState = WindowState.Minimized;
-                mainWindow.ShowInTaskbar = false;
-                trayService.MinimizeToTray();
+                mainWindow.Opened += OnMainWindowOpenedForMinimize;
+
+                void OnMainWindowOpenedForMinimize(object? s, EventArgs args)
+                {
+                    mainWindow.Opened -= OnMainWindowOpenedForMinimize;
+
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => { trayService.MinimizeToTray(); },
+                        Avalonia.Threading.DispatcherPriority.Background);
+                }
             }
 
             desktop.ShutdownRequested += OnShutdownRequested;

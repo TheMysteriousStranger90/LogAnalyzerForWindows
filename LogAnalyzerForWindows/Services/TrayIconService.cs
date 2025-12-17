@@ -14,6 +14,7 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
     private Window? _mainWindow;
     private bool _isInitialized;
     private bool _disposed;
+    private bool _pendingMinimizeToTray;
 
     public event Action? ShowWindowRequested;
     public event Action? ExitRequested;
@@ -26,10 +27,42 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
 
         _mainWindow = mainWindow;
 
+        if (_mainWindow.IsLoaded)
+        {
+            CreateTrayIconSafe();
+        }
+        else
+        {
+            _mainWindow.Opened += OnMainWindowOpened;
+        }
+
+        _isInitialized = true;
+    }
+
+    private void OnMainWindowOpened(object? sender, EventArgs e)
+    {
+        if (_mainWindow is not null)
+        {
+            _mainWindow.Opened -= OnMainWindowOpened;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            CreateTrayIconSafe();
+
+            if (_pendingMinimizeToTray)
+            {
+                _pendingMinimizeToTray = false;
+                MinimizeToTrayInternal();
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void CreateTrayIconSafe()
+    {
         try
         {
             CreateTrayIcon();
-            _isInitialized = true;
         }
         catch (InvalidOperationException ex)
         {
@@ -43,6 +76,8 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
 
     private void CreateTrayIcon()
     {
+        if (_trayIcon is not null) return;
+
         _trayMenu = new NativeMenu();
 
         var showMenuItem = new NativeMenuItem("Show Log Analyzer");
@@ -68,8 +103,18 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
 
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime)
         {
-            TrayIcon.SetIcons(Application.Current, [_trayIcon]);
+            var icons = TrayIcon.GetIcons(Application.Current);
+            if (icons is null)
+            {
+                TrayIcon.SetIcons(Application.Current, new TrayIcons { _trayIcon });
+            }
+            else if (!icons.Contains(_trayIcon))
+            {
+                icons.Add(_trayIcon);
+            }
         }
+
+        Debug.WriteLine("TrayIcon created successfully");
     }
 
     private void LoadTrayIconImage()
@@ -78,11 +123,45 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
 
         try
         {
-            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
-            if (File.Exists(iconPath))
+            var possiblePaths = new[]
             {
-                _trayIcon.Icon = new WindowIcon(iconPath);
+                Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "icon.ico"),
+                Path.Combine(Environment.CurrentDirectory, "Assets", "icon.ico")
+            };
+
+            foreach (var iconPath in possiblePaths)
+            {
+                if (File.Exists(iconPath))
+                {
+                    _trayIcon.Icon = new WindowIcon(iconPath);
+                    Debug.WriteLine($"Tray icon loaded from: {iconPath}");
+                    return;
+                }
             }
+
+            try
+            {
+                var uri = new Uri("avares://LogAnalyzerForWindows/Assets/icon.ico");
+                using var stream = Avalonia.Platform.AssetLoader.Open(uri);
+                if (stream is not null)
+                {
+                    // For WindowIcon we need a file path, so save to temp
+                    var tempPath = Path.Combine(Path.GetTempPath(), "LogAnalyzer_icon.ico");
+                    using var fileStream = File.Create(tempPath);
+                    stream.CopyTo(fileStream);
+                    fileStream.Close();
+                    _trayIcon.Icon = new WindowIcon(tempPath);
+                    Debug.WriteLine($"Tray icon loaded from embedded resource to: {tempPath}");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to load embedded icon: {ex.Message}");
+            }
+
+            Debug.WriteLine("Warning: Could not find tray icon file");
         }
         catch (IOException ex)
         {
@@ -109,17 +188,33 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
 
     public void ShowTrayIcon()
     {
-        if (_trayIcon is not null)
+        if (_trayIcon is null)
         {
-            _trayIcon.IsVisible = true;
+            Debug.WriteLine("ShowTrayIcon called but tray icon not yet created");
+            return;
         }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_trayIcon is not null)
+            {
+                _trayIcon.IsVisible = true;
+                Debug.WriteLine("Tray icon shown");
+            }
+        });
     }
 
     public void HideTrayIcon()
     {
         if (_trayIcon is not null)
         {
-            _trayIcon.IsVisible = false;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_trayIcon is not null)
+                {
+                    _trayIcon.IsVisible = false;
+                }
+            });
         }
     }
 
@@ -127,41 +222,64 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
     {
         if (_mainWindow is null) return;
 
-        Dispatcher.UIThread.InvokeAsync(() =>
+        if (_trayIcon is null)
         {
-            _mainWindow.Hide();
+            _pendingMinimizeToTray = true;
+            Debug.WriteLine("MinimizeToTray deferred - tray icon not ready");
+            return;
+        }
+
+        MinimizeToTrayInternal();
+    }
+
+    private void MinimizeToTrayInternal()
+    {
+        if (_mainWindow is null) return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
             ShowTrayIcon();
-        });
+            _mainWindow.ShowInTaskbar = false;
+            _mainWindow.Hide();
+            Debug.WriteLine("Window minimized to tray");
+        }, DispatcherPriority.Background);
     }
 
     public void RestoreFromTray()
     {
         if (_mainWindow is null) return;
 
-        _mainWindow.Show();
-        _mainWindow.ShowInTaskbar = true;
-        _mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
-        _mainWindow.Activate();
+        Dispatcher.UIThread.Post(() =>
+        {
+            _mainWindow.ShowInTaskbar = true;
+            _mainWindow.Show();
+            _mainWindow.WindowState = WindowState.Normal;
+            _mainWindow.Activate();
+            HideTrayIcon();
+            Debug.WriteLine("Window restored from tray");
+        });
     }
-
 
     public void ShowWindow()
     {
         if (_mainWindow is null) return;
 
-        Dispatcher.UIThread.InvokeAsync(() =>
+        Dispatcher.UIThread.Post(() =>
         {
+            _mainWindow.ShowInTaskbar = true;
             _mainWindow.Show();
             _mainWindow.WindowState = WindowState.Normal;
             _mainWindow.Activate();
+            _mainWindow.Focus();
             HideTrayIcon();
             ShowWindowRequested?.Invoke();
+            Debug.WriteLine("Window shown");
         });
     }
 
     private void ExitApplication()
     {
-        Dispatcher.UIThread.InvokeAsync(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             HideTrayIcon();
             ExitRequested?.Invoke();
@@ -177,7 +295,13 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
     {
         if (_trayIcon is not null)
         {
-            _trayIcon.ToolTipText = text;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_trayIcon is not null)
+                {
+                    _trayIcon.ToolTipText = text;
+                }
+            });
         }
     }
 
@@ -185,7 +309,18 @@ internal sealed class TrayIconService : ITrayIconService, IDisposable
     {
         if (_disposed) return;
 
-        _trayIcon?.Dispose();
+        if (_mainWindow is not null)
+        {
+            _mainWindow.Opened -= OnMainWindowOpened;
+        }
+
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Clicked -= OnTrayIconClicked;
+            _trayIcon.IsVisible = false;
+            _trayIcon.Dispose();
+        }
+
         _trayIcon = null;
         _trayMenu = null;
         _mainWindow = null;

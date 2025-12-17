@@ -8,7 +8,6 @@
         x:Class="LogAnalyzerForWindows.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/icon.ico"
-        Opacity="0.9"
         Title="AzioEventLog Analyzer">
 
     <Design.DataContext>

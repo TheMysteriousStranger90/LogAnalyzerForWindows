@@ -123,6 +123,16 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Update="Assets\icon.ico">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
+
+    <PropertyGroup>
+        <NoWarn>$(NoWarn);CS8795</NoWarn>
+    </PropertyGroup>
 </Project>
