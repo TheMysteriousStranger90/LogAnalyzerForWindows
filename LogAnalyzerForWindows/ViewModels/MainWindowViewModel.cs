@@ -46,6 +46,14 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private readonly HashSet<LogEntry> _processedLogs = [];
     private CancellationTokenSource? _processingCts;
 
+    private DashboardViewModel? _dashboardViewModel;
+
+    public DashboardViewModel? DashboardViewModel
+    {
+        get => _dashboardViewModel;
+        private set => SetProperty(ref _dashboardViewModel, value);
+    }
+
     public AvaloniaList<string> LogSources { get; } = new();
     public AvaloniaList<string> LogLevels { get; private set; } = new();
     public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days", "Last 7 days"];
@@ -341,6 +349,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _ = CheckDatabaseRecordsAsync();
 
         LoadAvailableLogSources();
+
+        DashboardViewModel = new DashboardViewModel(logRepository);
+        _ = DashboardViewModel.LoadSessionsAsync();
+        _ = DashboardViewModel.LoadDashboardDataAsync();
     }
 
     [SupportedOSPlatform("windows")]

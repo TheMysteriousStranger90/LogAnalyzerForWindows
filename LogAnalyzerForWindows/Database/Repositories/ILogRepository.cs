@@ -23,4 +23,31 @@ internal interface ILogRepository
     Task<int> DeleteOldLogsAsync(DateTime olderThan);
     Task<int> ClearAllLogsAsync();
     Task<Dictionary<string, int>> GetLogStatisticsAsync(string? sessionId = null);
+
+    Task<LogStatistics> GetDetailedStatisticsAsync(
+        string? sessionId = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        CancellationToken cancellationToken = default);
+
+    Task<List<TimeSeriesPoint>> GetLogsTimeSeriesAsync(
+        string? sessionId = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        TimeSpan? groupBy = null,
+        CancellationToken cancellationToken = default);
+
+    Task<Dictionary<string, int>> GetLogsByLevelAsync(
+        string? sessionId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<List<(string Source, int Count)>> GetTopSourcesAsync(
+        int top = 10,
+        string? sessionId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<List<(int EventId, int Count)>> GetTopEventIdsAsync(
+        int top = 10,
+        string? sessionId = null,
+        CancellationToken cancellationToken = default);
 }

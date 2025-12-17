@@ -100,6 +100,7 @@
         <PackageReference Include="Avalonia.Fonts.Inter" />
         <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" />
         <PackageReference Include="Avalonia.ReactiveUI" />
+        <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" />
         <PackageReference Include="MailKit" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
             <PrivateAssets>all</PrivateAssets>

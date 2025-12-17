@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LogAnalyzerForWindows.ViewModels"
+        xmlns:views="using:LogAnalyzerForWindows.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
@@ -19,394 +20,328 @@
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto, *, Auto, Auto, Auto">
-        <!-- Toolbar -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="10,5">
-            <ToggleButton Content="Database Mode"
-                          IsChecked="{Binding UseDatabaseMode}"
-                          IsEnabled="{Binding CanToggleDatabaseMode}">
-                <ToolTip.Tip>View historical logs from database</ToolTip.Tip>
-            </ToggleButton>
-            <Button Content="Clear All History" Command="{Binding ClearHistoryCommand}">
-                <ToolTip.Tip>Delete all logs from database</ToolTip.Tip>
-            </Button>
-        </StackPanel>
+    <Grid RowDefinitions="Auto, *">
+        <!-- Tab Control for switching between views -->
+        <TabControl Grid.Row="1" Margin="5">
+            <TabControl.Styles>
+                <Style Selector="TabItem">
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="Padding" Value="15,8"/>
+                </Style>
+            </TabControl.Styles>
 
-        <Grid Grid.Row="1" ColumnDefinitions="Auto, *">
-            <!-- Left Panel - Filters and Controls -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                          Margin="5,20,5,0">
-                <StackPanel Margin="10" Spacing="10" MinWidth="250">
-                    <TextBlock Text="Filters" FontWeight="Bold" FontSize="14" />
-
-                    <!-- Log Source Selection -->
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                        <Label Content="Source:" VerticalAlignment="Center" MinWidth="60" />
-                        <ComboBox x:Name="LogSourceList" MinWidth="160"
-                                  ItemsSource="{Binding LogSources}"
-                                  SelectedItem="{Binding SelectedLogSource}">
-                            <ToolTip.Tip>Select Windows Event Log source (System, Application, Security, etc.)</ToolTip.Tip>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Log Level Selection -->
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                        <Label Content="Level:" VerticalAlignment="Center" MinWidth="60" />
-                        <ComboBox x:Name="LogLevelList" MinWidth="160"
-                                  ItemsSource="{Binding LogLevels}"
-                                  SelectedItem="{Binding SelectedLogLevel}">
-                            <ToolTip.Tip>Available log levels for the selected source</ToolTip.Tip>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Time Range Selection -->
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                        <Label Content="Time:" VerticalAlignment="Center" MinWidth="60" />
-                        <ComboBox x:Name="TimeList" MinWidth="160"
-                                  ItemsSource="{Binding Times}"
-                                  SelectedItem="{Binding SelectedTime}">
-                            <ToolTip.Tip>Time range to monitor</ToolTip.Tip>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <Separator Margin="0,10,0,10" />
-
-                    <TextBlock Text="Output" FontWeight="Bold" FontSize="14" />
-
-                    <!-- Format Selection -->
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                        <Label Content="Format:" VerticalAlignment="Center" MinWidth="60" />
-                        <ComboBox x:Name="FormatComboBox" MinWidth="160"
-                                  ItemsSource="{Binding Formats}"
-                                  SelectedItem="{Binding SelectedFormat}">
-                            <ToolTip.Tip>Export format (txt or json)</ToolTip.Tip>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Save Logs Button - Only in Real-time Mode -->
-                    <Button Command="{Binding SaveCommand}"
-                            IsEnabled="{Binding CanSave}"
-                            IsVisible="{Binding !UseDatabaseMode}"
-                            Margin="0,10,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="{SvgImage /Assets/save.svg}" Height="16" Width="16" />
-                            <TextBlock Text="Save Logs" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ToolTip.Tip>Saves the current logs to a file</ToolTip.Tip>
-                    </Button>
-
-                    <!-- Export Session Button - Only in Database Mode -->
-                    <Button Command="{Binding ExportSessionCommand}"
-                            IsVisible="{Binding UseDatabaseMode}"
-                            Margin="0,10,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="{SvgImage /Assets/save.svg}" Height="16" Width="16" />
-                            <TextBlock Text="Export Session" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ToolTip.Tip>Export all logs from the selected session</ToolTip.Tip>
-                    </Button>
-
-                    <!-- Open Folder Button -->
-                    <Button Command="{Binding OpenFolderCommand}" IsEnabled="{Binding IsFolderExists}" Margin="0,5,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="{SvgImage /Assets/folder-plus.svg}" Height="16" Width="16" />
-                            <TextBlock Text="Open Logs Folder" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ToolTip.Tip>Opens the LogAnalyzerForWindows directory</ToolTip.Tip>
-                    </Button>
-
-                    <!-- Archive Button -->
-                    <Button Command="{Binding ArchiveLatestFolderCommand}" IsEnabled="{Binding IsFolderExists}"
-                            Margin="0,5,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="{SvgImage /Assets/archive.svg}" Height="16" Width="16" />
-                            <TextBlock Text="Archive Latest Logs" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ToolTip.Tip>Archives the latest daily log folder</ToolTip.Tip>
-                    </Button>
-
-                    <Separator Margin="0,10,0,10" />
-
-                    <!-- Settings Section -->
-                    <TextBlock Text="Settings" FontWeight="Bold" FontSize="14" />
-
-                    <!-- Settings Button -->
-                    <Button Command="{Binding OpenSettingsCommand}" Margin="0,5,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="{SvgImage /Assets/settings.svg}" Height="16" Width="16" />
-                            <TextBlock Text="Open Settings" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ToolTip.Tip>Configure SMTP, auto-start and other settings</ToolTip.Tip>
-                    </Button>
-
-                    <Separator Margin="0,10,0,10" />
-
-                    <TextBlock Text="Email" FontWeight="Bold" FontSize="14" />
-
-                    <!-- Email Input -->
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                        <Label Content="Email:" VerticalAlignment="Center" MinWidth="60" />
-                        <TextBox x:Name="EmailInput" Text="{Binding UserEmail}" MinWidth="160"
-                                 Watermark="email@example.com">
-                            <ToolTip.Tip>Enter recipient email address</ToolTip.Tip>
-                        </TextBox>
-                    </StackPanel>
-
-                    <!-- Send Email Button -->
-                    <Button Command="{Binding SendEmailCommand}" Margin="0,10,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Image Source="{SvgImage /Assets/mail.svg}" Height="16" Width="16" />
-                            <TextBlock Text="Send Latest Archive" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ToolTip.Tip>Sends the latest zip file to the specified email</ToolTip.Tip>
-                    </Button>
-                </StackPanel>
-            </ScrollViewer>
-
-            <!-- Right Panel - Content Area -->
-            <Grid Grid.Column="1" Margin="5,30,10,10">
-                <!-- Real-time monitoring output -->
-                <TextBox x:Name="Output"
-                         IsVisible="{Binding !UseDatabaseMode}"
-                         Text="{Binding OutputText}"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                         IsReadOnly="True"
-                         AcceptsReturn="True"
-                         TextWrapping="NoWrap"
-                         FontFamily="Consolas, Courier New, Monospace"
-                         FontSize="12"
-                         Background="#1E1E1E"
-                         Foreground="#D4D4D4">
-                    <ToolTip.Tip>Real-time log monitoring output</ToolTip.Tip>
-                </TextBox>
-
-                <!-- Database view with pagination and search -->
-                <Grid IsVisible="{Binding UseDatabaseMode}" RowDefinitions="Auto, Auto, *, Auto">
-                    <!-- Session Filter Row -->
+            <!-- Monitoring Tab -->
+            <TabItem Header="Monitoring">
+                <Grid RowDefinitions="Auto, *, Auto, Auto, Auto">
+                    <!-- Toolbar -->
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="10,5">
-                        <TextBlock Text="Session:" VerticalAlignment="Center" FontWeight="Bold" />
-                        <ComboBox ItemsSource="{Binding AvailableSessions}"
-                                  SelectedItem="{Binding SelectedSession}"
-                                  MinWidth="300"
-                                  ToolTip.Tip="Filter logs by monitoring session" />
-                        <TextBlock Text="{Binding PaginationViewModel.TotalRecords, StringFormat='Total: {0} logs'}"
-                                   VerticalAlignment="Center"
-                                   FontWeight="Bold"
-                                   Foreground="#0078D4"
-                                   Margin="10,0,0,0" />
+                        <ToggleButton Content="Database Mode"
+                                      IsChecked="{Binding UseDatabaseMode}"
+                                      IsEnabled="{Binding CanToggleDatabaseMode}">
+                            <ToolTip.Tip>View historical logs from database</ToolTip.Tip>
+                        </ToggleButton>
+                        <Button Content="Clear All History" Command="{Binding ClearHistoryCommand}">
+                            <ToolTip.Tip>Delete all logs from database</ToolTip.Tip>
+                        </Button>
                     </StackPanel>
 
-                    <!-- Search and Filter Panel -->
-                    <Border Grid.Row="1" Background="#2D2D2D" CornerRadius="5" Padding="10" Margin="10,5">
-                        <StackPanel Spacing="10">
-                            <!-- Search Row -->
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <TextBlock Text="🔍" VerticalAlignment="Center" FontSize="16" />
-                                <TextBox Text="{Binding PaginationViewModel.SearchText}"
-                                         Watermark="Search in messages..."
-                                         MinWidth="300"
-                                         ToolTip.Tip="Enter text to search in log messages (press Search or Enter)" />
-                                <Button Content="Search"
-                                        Command="{Binding PaginationViewModel.SearchCommand}"
-                                        MinWidth="80"
-                                        ToolTip.Tip="Execute search">
-                                    <Button.KeyBindings>
-                                        <KeyBinding Gesture="Enter"
-                                                    Command="{Binding PaginationViewModel.SearchCommand}" />
-                                    </Button.KeyBindings>
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto, *">
+                        <!-- Left Panel - Filters and Controls -->
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      Margin="5,20,5,0">
+                            <StackPanel Margin="10" Spacing="10" MinWidth="250">
+                                <TextBlock Text="Filters" FontWeight="Bold" FontSize="14" />
+
+                                <!-- Log Source Selection -->
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <Label Content="Source:" VerticalAlignment="Center" MinWidth="60" />
+                                    <ComboBox x:Name="LogSourceList" MinWidth="160"
+                                              ItemsSource="{Binding LogSources}"
+                                              SelectedItem="{Binding SelectedLogSource}">
+                                        <ToolTip.Tip>Select Windows Event Log source</ToolTip.Tip>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Log Level Selection -->
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <Label Content="Level:" VerticalAlignment="Center" MinWidth="60" />
+                                    <ComboBox x:Name="LogLevelList" MinWidth="160"
+                                              ItemsSource="{Binding LogLevels}"
+                                              SelectedItem="{Binding SelectedLogLevel}">
+                                        <ToolTip.Tip>Available log levels</ToolTip.Tip>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Time Range Selection -->
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <Label Content="Time:" VerticalAlignment="Center" MinWidth="60" />
+                                    <ComboBox x:Name="TimeList" MinWidth="160"
+                                              ItemsSource="{Binding Times}"
+                                              SelectedItem="{Binding SelectedTime}">
+                                        <ToolTip.Tip>Time range to monitor</ToolTip.Tip>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <Separator Margin="0,10,0,10" />
+
+                                <TextBlock Text="Output" FontWeight="Bold" FontSize="14" />
+
+                                <!-- Format Selection -->
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <Label Content="Format:" VerticalAlignment="Center" MinWidth="60" />
+                                    <ComboBox x:Name="FormatComboBox" MinWidth="160"
+                                              ItemsSource="{Binding Formats}"
+                                              SelectedItem="{Binding SelectedFormat}">
+                                        <ToolTip.Tip>Export format</ToolTip.Tip>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Save/Export Buttons -->
+                                <Button Command="{Binding SaveCommand}"
+                                        IsEnabled="{Binding CanSave}"
+                                        IsVisible="{Binding !UseDatabaseMode}"
+                                        Margin="0,10,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Image Source="{SvgImage /Assets/save.svg}" Height="16" Width="16" />
+                                        <TextBlock Text="Save Logs" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </Button>
-                                <Button Content="Clear Filters"
-                                        Command="{Binding PaginationViewModel.ClearFiltersCommand}"
-                                        MinWidth="100"
-                                        ToolTip.Tip="Clear all search filters" />
-                            </StackPanel>
 
-                            <!-- Filters Row -->
-                            <StackPanel Orientation="Horizontal" Spacing="20">
-                                <!-- Event ID Filter -->
+                                <Button Command="{Binding ExportSessionCommand}"
+                                        IsVisible="{Binding UseDatabaseMode}"
+                                        Margin="0,10,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="📤" FontSize="14"/>
+                                        <TextBlock Text="Export Session" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Command="{Binding OpenFolderCommand}"
+                                        IsEnabled="{Binding IsFolderExists}"
+                                        Margin="0,5,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Image Source="{SvgImage /Assets/folder-plus.svg}" Height="16" Width="16" />
+                                        <TextBlock Text="Open Logs Folder" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Command="{Binding ArchiveLatestFolderCommand}"
+                                        IsEnabled="{Binding IsFolderExists}"
+                                        Margin="0,5,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Image Source="{SvgImage /Assets/archive.svg}" Height="16" Width="16" />
+                                        <TextBlock Text="Archive Latest Logs" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Separator Margin="0,10,0,10" />
+
+                                <TextBlock Text="Settings" FontWeight="Bold" FontSize="14" />
+
+                                <Button Command="{Binding OpenSettingsCommand}" Margin="0,5,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Image Source="{SvgImage /Assets/settings.svg}" Height="16" Width="16" />
+                                        <TextBlock Text="Open Settings" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Separator Margin="0,10,0,10" />
+
+                                <TextBlock Text="Email" FontWeight="Bold" FontSize="14" />
+
                                 <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <TextBlock Text="Event ID:" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                    <ComboBox ItemsSource="{Binding PaginationViewModel.AvailableEventIds}"
-                                              SelectedItem="{Binding PaginationViewModel.EventIdFilter}"
-                                              MinWidth="100"
-                                              ToolTip.Tip="Filter by Windows Event ID">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" />
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
+                                    <Label Content="Email:" VerticalAlignment="Center" MinWidth="60" />
+                                    <TextBox Text="{Binding UserEmail}"
+                                             MinWidth="160"
+                                             Watermark="email@example.com"/>
                                 </StackPanel>
 
-                                <!-- Source Filter -->
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <TextBlock Text="Source:" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                    <ComboBox ItemsSource="{Binding PaginationViewModel.AvailableSources}"
-                                              SelectedItem="{Binding PaginationViewModel.SourceFilter}"
-                                              MinWidth="200"
-                                              ToolTip.Tip="Filter by event source (e.g., Service Control Manager, DCOM)">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" />
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
+                                <Button Command="{Binding SendEmailCommand}" Margin="0,10,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Image Source="{SvgImage /Assets/mail.svg}" Height="16" Width="16" />
+                                        <TextBlock Text="Send Latest Archive" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Right Panel - Content Area -->
+                        <Grid Grid.Column="1" Margin="5,30,10,10">
+                            <!-- Real-time monitoring output -->
+                            <TextBox x:Name="Output"
+                                     IsVisible="{Binding !UseDatabaseMode}"
+                                     Text="{Binding OutputText}"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                     IsReadOnly="True"
+                                     AcceptsReturn="True"
+                                     TextWrapping="NoWrap"
+                                     FontFamily="Consolas, Courier New, Monospace"
+                                     FontSize="12"
+                                     Background="#1E1E1E"
+                                     Foreground="#D4D4D4"/>
+
+                            <!-- Database view with pagination -->
+                            <Grid IsVisible="{Binding UseDatabaseMode}" RowDefinitions="Auto, Auto, *, Auto">
+                                <!-- Session Filter -->
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="10,5">
+                                    <TextBlock Text="Session:" VerticalAlignment="Center" FontWeight="Bold" />
+                                    <ComboBox ItemsSource="{Binding AvailableSessions}"
+                                              SelectedItem="{Binding SelectedSession}"
+                                              MinWidth="300"/>
+                                    <TextBlock Text="{Binding PaginationViewModel.TotalRecords, StringFormat='Total: {0} logs'}"
+                                               VerticalAlignment="Center"
+                                               FontWeight="Bold"
+                                               Foreground="#0078D4"
+                                               Margin="10,0,0,0" />
                                 </StackPanel>
 
-                                <!-- Active Filters Indicator -->
-                                <TextBlock Text="⚡ Filters Active"
-                                           VerticalAlignment="Center"
-                                           Foreground="#FFFFFF"
-                                           FontWeight="Bold"
-                                           IsVisible="{Binding PaginationViewModel.HasActiveFilters}"
-                                           ToolTip.Tip="One or more filters are currently applied" />
-                            </StackPanel>
-                        </StackPanel>
+                                <!-- Search Panel -->
+                                <Border Grid.Row="1" Background="#2D2D2D" CornerRadius="5" Padding="10" Margin="10,5">
+                                    <StackPanel Spacing="10">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="🔍" VerticalAlignment="Center" FontSize="16" />
+                                            <TextBox Text="{Binding PaginationViewModel.SearchText}"
+                                                     Watermark="Search in messages..."
+                                                     MinWidth="300"/>
+                                            <Button Content="Search"
+                                                    Command="{Binding PaginationViewModel.SearchCommand}"
+                                                    MinWidth="80"/>
+                                            <Button Content="Clear Filters"
+                                                    Command="{Binding PaginationViewModel.ClearFiltersCommand}"
+                                                    MinWidth="100"/>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="20">
+                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                <TextBlock Text="Event ID:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                                <ComboBox ItemsSource="{Binding PaginationViewModel.AvailableEventIds}"
+                                                          SelectedItem="{Binding PaginationViewModel.EventIdFilter}"
+                                                          MinWidth="100"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                <TextBlock Text="Source:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                                <ComboBox ItemsSource="{Binding PaginationViewModel.AvailableSources}"
+                                                          SelectedItem="{Binding PaginationViewModel.SourceFilter}"
+                                                          MinWidth="200"/>
+                                            </StackPanel>
+
+                                            <TextBlock Text="⚡ Filters Active"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#FFFFFF"
+                                                       FontWeight="Bold"
+                                                       IsVisible="{Binding PaginationViewModel.HasActiveFilters}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Data Grid -->
+                                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="10,10,10,0">
+                                    <DataGrid ItemsSource="{Binding PaginationViewModel.CurrentPageLogs}"
+                                              IsReadOnly="True"
+                                              AutoGenerateColumns="False"
+                                              GridLinesVisibility="All"
+                                              CanUserReorderColumns="True"
+                                              CanUserResizeColumns="True"
+                                              CanUserSortColumns="True"
+                                              RowBackground="#1E1E1E">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Timestamp"
+                                                                Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}"
+                                                                Width="155"/>
+                                            <DataGridTextColumn Header="Event ID"
+                                                                Binding="{Binding EventId}"
+                                                                Width="75"/>
+                                            <DataGridTextColumn Header="Level"
+                                                                Binding="{Binding Level}"
+                                                                Width="95"/>
+                                            <DataGridTextColumn Header="Source"
+                                                                Binding="{Binding Source}"
+                                                                Width="180"/>
+                                            <DataGridTextColumn Header="Message"
+                                                                Binding="{Binding Message}"
+                                                                Width="*"
+                                                                MinWidth="300"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </ScrollViewer>
+
+                                <!-- Pagination -->
+                                <Border Grid.Row="3" Background="#252525" CornerRadius="5" Padding="10" Margin="10,10,10,0">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                                        <Button Content="⏮ First" Command="{Binding PaginationViewModel.FirstPageCommand}" Width="75"/>
+                                        <Button Content="◀ Prev" Command="{Binding PaginationViewModel.PreviousPageCommand}" Width="75"/>
+                                        <Border Background="#333333" CornerRadius="3" Padding="10,5">
+                                            <TextBlock Text="{Binding PaginationViewModel.PageInfo}"
+                                                       VerticalAlignment="Center"
+                                                       FontWeight="Bold"
+                                                       MinWidth="180"
+                                                       TextAlignment="Center"/>
+                                        </Border>
+                                        <Button Content="Next ▶" Command="{Binding PaginationViewModel.NextPageCommand}" Width="75"/>
+                                        <Button Content="Last ⏭" Command="{Binding PaginationViewModel.LastPageCommand}" Width="75"/>
+                                        <Separator Width="1" Background="#555555" Margin="5,0"/>
+                                        <TextBlock Text="Per page:" VerticalAlignment="Center" Foreground="#AAAAAA"/>
+                                        <ComboBox ItemsSource="{Binding PaginationViewModel.PageSizes}"
+                                                  SelectedItem="{Binding PaginationViewModel.PageSize}"
+                                                  Width="75"/>
+                                        <Button Content="🔄 Refresh" Command="{Binding PaginationViewModel.RefreshCommand}" Width="85"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Status Bar -->
+                    <Border Grid.Row="2" Background="#333333" Padding="10" Margin="10,5,10,5" CornerRadius="3">
+                        <TextBlock Foreground="White"
+                                   FontSize="12"
+                                   TextAlignment="Center"
+                                   Text="{Binding TextBlock}"
+                                   TextWrapping="Wrap" />
                     </Border>
 
-                    <!-- Data Grid -->
-                    <ScrollViewer Grid.Row="2"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  Margin="10,10,10,0">
-                        <DataGrid ItemsSource="{Binding PaginationViewModel.CurrentPageLogs}"
-                                  IsReadOnly="True"
-                                  AutoGenerateColumns="False"
-                                  GridLinesVisibility="All"
-                                  BorderThickness="1"
-                                  BorderBrush="#555555"
-                                  CanUserReorderColumns="True"
-                                  CanUserResizeColumns="True"
-                                  CanUserSortColumns="True"
-                                  RowBackground="#1E1E1E">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Timestamp"
-                                                    Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}"
-                                                    Width="155"
-                                                    IsReadOnly="True" />
-                                <DataGridTextColumn Header="Event ID"
-                                                    Binding="{Binding EventId}"
-                                                    Width="75"
-                                                    IsReadOnly="True" />
-                                <DataGridTextColumn Header="Level"
-                                                    Binding="{Binding Level}"
-                                                    Width="95"
-                                                    IsReadOnly="True" />
-                                <DataGridTextColumn Header="Source"
-                                                    Binding="{Binding Source}"
-                                                    Width="180"
-                                                    IsReadOnly="True" />
-                                <DataGridTextColumn Header="Message"
-                                                    Binding="{Binding Message}"
-                                                    Width="*"
-                                                    MinWidth="300"
-                                                    IsReadOnly="True" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </ScrollViewer>
+                    <!-- Control Buttons -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="20"
+                                Margin="10">
+                        <Button Command="{Binding StartCommand}" MinWidth="100" Height="40">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Image Source="{SvgImage /Assets/play.svg}" Height="16" Width="16" />
+                                <TextBlock Text="Start" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
 
-                    <!-- Pagination Controls -->
-                    <Border Grid.Row="3" Background="#252525" CornerRadius="5" Padding="10" Margin="10,10,10,0">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
-                            <Button Content="⏮ First"
-                                    Command="{Binding PaginationViewModel.FirstPageCommand}"
-                                    Width="75"
-                                    ToolTip.Tip="Go to first page" />
+                        <Button Command="{Binding StopCommand}" MinWidth="100" Height="40">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Image Source="{SvgImage /Assets/pause.svg}" Height="16" Width="16" />
+                                <TextBlock Text="Stop" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
 
-                            <Button Content="◀ Prev"
-                                    Command="{Binding PaginationViewModel.PreviousPageCommand}"
-                                    Width="75"
-                                    ToolTip.Tip="Go to previous page" />
-
-                            <Border Background="#333333" CornerRadius="3" Padding="10,5">
-                                <TextBlock Text="{Binding PaginationViewModel.PageInfo}"
-                                           VerticalAlignment="Center"
-                                           FontWeight="Bold"
-                                           Foreground="#E0E0E0"
-                                           MinWidth="180"
-                                           TextAlignment="Center" />
-                            </Border>
-
-                            <Button Content="Next ▶"
-                                    Command="{Binding PaginationViewModel.NextPageCommand}"
-                                    Width="75"
-                                    ToolTip.Tip="Go to next page" />
-
-                            <Button Content="Last ⏭"
-                                    Command="{Binding PaginationViewModel.LastPageCommand}"
-                                    Width="75"
-                                    ToolTip.Tip="Go to last page" />
-
-                            <Separator Width="1" Background="#555555" Margin="5,0" />
-
-                            <TextBlock Text="Per page:" VerticalAlignment="Center" Foreground="#AAAAAA" />
-                            <ComboBox ItemsSource="{Binding PaginationViewModel.PageSizes}"
-                                      SelectedItem="{Binding PaginationViewModel.PageSize}"
-                                      Width="75"
-                                      ToolTip.Tip="Number of items per page" />
-
-                            <Button Content="🔄 Refresh"
-                                    Command="{Binding PaginationViewModel.RefreshCommand}"
-                                    Width="85"
-                                    ToolTip.Tip="Refresh current data" />
+                    <!-- Loading Indicator -->
+                    <Border Grid.Row="0" Grid.RowSpan="5"
+                            IsVisible="{Binding IsLoading}"
+                            Background="#80000000"
+                            ZIndex="1000">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                            <TextBlock Text="Loading..."
+                                       Foreground="White"
+                                       FontSize="20"
+                                       FontWeight="Bold"/>
+                            <ProgressBar IsIndeterminate="True" Width="200" Height="6"/>
                         </StackPanel>
                     </Border>
                 </Grid>
-            </Grid>
-        </Grid>
+            </TabItem>
 
-        <!-- Status Bar -->
-        <Border Grid.Row="2" Background="#333333" Padding="10" Margin="10,5,10,5" CornerRadius="3">
-            <TextBlock Foreground="White"
-                       FontSize="12"
-                       TextAlignment="Center"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       Text="{Binding TextBlock}"
-                       TextWrapping="Wrap" />
-        </Border>
-
-        <!-- Control Buttons -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Spacing="20"
-                    Margin="10">
-            <Button Command="{Binding StartCommand}" MinWidth="100" Height="40">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Image Source="{SvgImage /Assets/play.svg}" Height="16" Width="16" />
-                    <TextBlock Text="Start" VerticalAlignment="Center" />
-                </StackPanel>
-                <ToolTip.Tip>Starts monitoring logs</ToolTip.Tip>
-            </Button>
-
-            <Button Command="{Binding StopCommand}" MinWidth="100" Height="40">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Image Source="{SvgImage /Assets/pause.svg}" Height="16" Width="16" />
-                    <TextBlock Text="Stop" VerticalAlignment="Center" />
-                </StackPanel>
-                <ToolTip.Tip>Stops monitoring logs</ToolTip.Tip>
-            </Button>
-        </StackPanel>
-
-        <!-- Loading Indicator -->
-        <Border Grid.Row="0" Grid.RowSpan="5"
-                IsVisible="{Binding IsLoading}"
-                Background="#80000000"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"
-                ZIndex="1000">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                <TextBlock Text="Loading..."
-                           Foreground="White"
-                           FontSize="20"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Center" />
-                <ProgressBar IsIndeterminate="True"
-                             Width="200"
-                             Height="6" />
-            </StackPanel>
-        </Border>
+            <!-- Dashboard Tab -->
+            <TabItem Header="Dashboard">
+                <views:DashboardView DataContext="{Binding DashboardViewModel}"/>
+            </TabItem>
+        </TabControl>
     </Grid>
 </Window>

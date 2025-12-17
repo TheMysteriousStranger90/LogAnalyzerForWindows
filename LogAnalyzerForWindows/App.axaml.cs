@@ -108,6 +108,7 @@ internal sealed class App : Application
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<Func<ILogRepository, PaginationViewModel>>(sp =>
             repository => new PaginationViewModel(repository));
+        services.AddTransient<DashboardViewModel>();
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)

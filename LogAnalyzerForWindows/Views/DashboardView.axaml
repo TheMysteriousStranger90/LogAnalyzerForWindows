@@ -1,0 +1,225 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LogAnalyzerForWindows.ViewModels"
+             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="900"
+             x:Class="LogAnalyzerForWindows.Views.DashboardView"
+             x:DataType="vm:DashboardViewModel">
+
+    <Design.DataContext>
+        <vm:DashboardViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto, Auto, *, Auto">
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#1E1E1E" Padding="15" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="*, Auto">
+                <StackPanel Orientation="Horizontal" Spacing="15">
+                    <TextBlock Text="Dashboard"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               VerticalAlignment="Center" />
+
+                    <ComboBox ItemsSource="{Binding AvailableSessions}"
+                              SelectedItem="{Binding SelectedSession}"
+                              MinWidth="250"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="Filter by session" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Command="{Binding RefreshCommand}"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="🔄" FontSize="16" />
+                        <TextBlock Text="Refresh" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Summary Cards -->
+        <Grid Grid.Row="1" ColumnDefinitions="*, *, *, *" Margin="10,0,10,10">
+            <!-- Total Logs -->
+            <Border Grid.Column="0" Background="#2D2D2D" CornerRadius="8" Padding="15" Margin="0,0,5,0">
+                <StackPanel>
+                    <TextBlock Text="Total Logs"
+                               Foreground="#AAAAAA"
+                               FontSize="12" />
+                    <TextBlock Text="{Binding TotalLogs}"
+                               Foreground="White"
+                               FontSize="32"
+                               FontWeight="Bold" />
+                    <TextBlock Text="All Events"
+                               Foreground="#888888"
+                               FontSize="11" />
+                </StackPanel>
+            </Border>
+
+            <!-- Errors -->
+            <Border Grid.Column="1" Background="#3D1F1F" CornerRadius="8" Padding="15" Margin="5,0">
+                <StackPanel>
+                    <TextBlock Text="Errors"
+                               Foreground="#FF6B6B"
+                               FontSize="12" />
+                    <TextBlock Text="{Binding ErrorCount}"
+                               Foreground="#FF4444"
+                               FontSize="32"
+                               FontWeight="Bold" />
+                    <TextBlock Text="🔴 Critical Issues"
+                               Foreground="#888888"
+                               FontSize="11" />
+                </StackPanel>
+            </Border>
+
+            <!-- Warnings -->
+            <Border Grid.Column="2" Background="#3D3D1F" CornerRadius="8" Padding="15" Margin="5,0">
+                <StackPanel>
+                    <TextBlock Text="Warnings"
+                               Foreground="#FFB347"
+                               FontSize="12" />
+                    <TextBlock Text="{Binding WarningCount}"
+                               Foreground="#FFA500"
+                               FontSize="32"
+                               FontWeight="Bold" />
+                    <TextBlock Text="⚠️ Attention Needed"
+                               Foreground="#888888"
+                               FontSize="11" />
+                </StackPanel>
+            </Border>
+
+            <!-- Information -->
+            <Border Grid.Column="3" Background="#1F2D3D" CornerRadius="8" Padding="15" Margin="5,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Information"
+                               Foreground="#87CEEB"
+                               FontSize="12" />
+                    <TextBlock Text="{Binding InformationCount}"
+                               Foreground="#1E90FF"
+                               FontSize="32"
+                               FontWeight="Bold" />
+                    <TextBlock Text="ℹ️ Info Events"
+                               Foreground="#888888"
+                               FontSize="11" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Charts Grid -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="10,0">
+            <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="*, *">
+
+                <!-- Pie Chart - Log Levels -->
+                <Border Grid.Row="0" Grid.Column="0"
+                        Background="#252525"
+                        CornerRadius="8"
+                        Padding="15"
+                        Margin="0,0,5,10"
+                        MinHeight="300">
+                    <Grid RowDefinitions="Auto, *">
+                        <TextBlock Text="Log Level Distribution"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Margin="0,0,0,10" />
+                        <lvc:PieChart Grid.Row="1"
+                                      Series="{Binding LevelPieSeries}"
+                                      LegendPosition="Right"
+                                      LegendTextPaint="{x:Null}" />
+                    </Grid>
+                </Border>
+
+                <!-- Line Chart - Timeline -->
+                <Border Grid.Row="0" Grid.Column="1"
+                        Background="#252525"
+                        CornerRadius="8"
+                        Padding="15"
+                        Margin="5,0,0,10"
+                        MinHeight="300">
+                    <Grid RowDefinitions="Auto, *">
+                        <TextBlock Text="Events Over Time"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Margin="0,0,0,10" />
+                        <lvc:CartesianChart Grid.Row="1"
+                                            Series="{Binding TimelineSeries}"
+                                            XAxes="{Binding TimelineXAxes}"
+                                            YAxes="{Binding TimelineYAxes}"
+                                            ZoomMode="X" />
+                    </Grid>
+                </Border>
+
+                <!-- Bar Chart - Top Sources -->
+                <Border Grid.Row="1" Grid.Column="0"
+                        Background="#252525"
+                        CornerRadius="8"
+                        Padding="15"
+                        Margin="0,0,5,10"
+                        MinHeight="300">
+                    <Grid RowDefinitions="Auto, *">
+                        <TextBlock Text="Top Event Sources"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Margin="0,0,0,10" />
+                        <lvc:CartesianChart Grid.Row="1"
+                                            Series="{Binding TopSourcesSeries}"
+                                            XAxes="{Binding SourcesXAxes}"
+                                            YAxes="{Binding SourcesYAxes}" />
+                    </Grid>
+                </Border>
+
+                <!-- Horizontal Bar Chart - Top Event IDs -->
+                <Border Grid.Row="1" Grid.Column="1"
+                        Background="#252525"
+                        CornerRadius="8"
+                        Padding="15"
+                        Margin="5,0,0,10"
+                        MinHeight="300">
+                    <Grid RowDefinitions="Auto, *">
+                        <TextBlock Text="Top Event IDs"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Margin="0,0,0,10" />
+                        <lvc:CartesianChart Grid.Row="1"
+                                            Series="{Binding TopEventIdsSeries}" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="3" Background="#333333" Padding="10" Margin="10,0,10,10" CornerRadius="5">
+            <Grid ColumnDefinitions="*, Auto">
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="White"
+                           VerticalAlignment="Center" />
+                <ProgressBar Grid.Column="1"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsLoading}"
+                             Width="100"
+                             Height="4" />
+            </Grid>
+        </Border>
+
+        <!-- Loading Overlay -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                IsVisible="{Binding IsLoading}"
+                Background="#80000000"
+                ZIndex="1000">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                <TextBlock Text="Loading Dashboard..."
+                           Foreground="White"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center" />
+                <ProgressBar IsIndeterminate="True" Width="200" Height="6" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

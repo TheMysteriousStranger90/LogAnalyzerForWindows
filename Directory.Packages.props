@@ -13,6 +13,7 @@
     <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.8" />
     <PackageVersion Include="Avalonia.ReactiveUI" Version="11.3.8" />
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="11.3.8" />
+    <PackageVersion Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.0.0-rc6.1" />
     <!-- EF Core for SQLite -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10" />
