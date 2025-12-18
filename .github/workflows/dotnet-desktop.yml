@@ -13,7 +13,8 @@ env:
     DOTNET_VERSION: '9.0.x'
     SOLUTION_NAME: 'LogAnalyzerForWindows.sln'
     PROJECT_PATH: 'LogAnalyzerForWindows/LogAnalyzerForWindows.csproj'
-    ARTIFACT_NAME: 'LogAnalyzerForWindows'
+    ARTIFACT_NAME: 'AzioEventLogAnalyzer'
+    EXE_NAME: 'AzioEventLogAnalyzer.exe'
 
 jobs:
     # ============================================
@@ -37,12 +38,18 @@ jobs:
             - name: Restore dependencies
               run: dotnet restore ${{ env.SOLUTION_NAME }}
 
+            - name: Fix code formatting
+              run: dotnet format ${{ env.SOLUTION_NAME }} --verbosity diagnostic
+
             - name: Check code formatting
               run: dotnet format ${{ env.SOLUTION_NAME }} --verify-no-changes --verbosity diagnostic
-              continue-on-error: true
 
             - name: Run Code Analysis
-              run: dotnet build ${{ env.SOLUTION_NAME }} --configuration Release --no-restore /p:TreatWarningsAsErrors=false
+              run: |
+                  dotnet build ${{ env.SOLUTION_NAME }} `
+                    --configuration Release `
+                    --no-restore `
+                    /p:TreatWarningsAsErrors=true
 
     # ============================================
     # Job 2: Build & Test
@@ -84,7 +91,8 @@ jobs:
                   dotnet build ${{ env.SOLUTION_NAME }} `
                     --configuration ${{ matrix.configuration }} `
                     --no-restore `
-                    /p:ContinuousIntegrationBuild=true
+                    /p:ContinuousIntegrationBuild=true `
+                    /p:AssemblyName=AzioEventLogAnalyzer
 
             - name: Run Unit Tests
               if: matrix.configuration == 'Release'
@@ -103,6 +111,13 @@ jobs:
               with:
                   name: test-results
                   path: TestResults/**/*.trx
+                  retention-days: 7
+
+            - name: Upload Build Artifacts (${{ matrix.configuration }})
+              uses: actions/upload-artifact@v4
+              with:
+                  name: Build-Artifacts-${{ matrix.configuration }}
+                  path: LogAnalyzerForWindows/bin/${{ matrix.configuration }}
                   retention-days: 7
 
     # ============================================
@@ -132,7 +147,7 @@ jobs:
                   if ("${{ github.ref }}" -match "refs/tags/v(.*)") {
                     $version = $matches[1]
                   } else {
-                    $version = "2.0.0-dev.${{ github.run_number }}"
+                    $version = "1.4.0-dev.${{ github.run_number }}"
                   }
                   echo "version=$version" >> $env:GITHUB_OUTPUT
                   echo "Version: $version"
@@ -154,6 +169,7 @@ jobs:
                     /p:IncludeAllContentForSelfExtract=true `
                     /p:DebugType=embedded `
                     /p:DebugSymbols=true `
+                    /p:AssemblyName=AzioEventLogAnalyzer `
                     /p:Version=${{ steps.version.outputs.version }}
 
             - name: List published files
@@ -162,7 +178,7 @@ jobs:
             - name: Get file size
               id: filesize
               run: |
-                  $exePath = "./publish/win-x64/LogAnalyzerForWindows.exe"
+                  $exePath = "./publish/win-x64/${{ env.EXE_NAME }}"
                   if (Test-Path $exePath) {
                     $sizeBytes = (Get-Item $exePath).Length
                     $sizeMB = [math]::Round($sizeBytes / 1MB, 2)
@@ -170,6 +186,7 @@ jobs:
                     echo "Executable size: $sizeMB MB"
                   } else {
                     echo "size_mb=Unknown" >> $env:GITHUB_OUTPUT
+                    Write-Warning "Executable not found at: $exePath"
                   }
 
             - name: Create ZIP archive
@@ -202,11 +219,12 @@ jobs:
             - name: Create build info
               run: |
                   $buildInfo = @"
-                  Build Information
-                  =================
+                  AzioEventLog Analyzer - Build Information
+                  ==========================================
                   Version: ${{ steps.version.outputs.version }}
                   Configuration: Release (Hybrid - ReadyToRun without Trimming)
                   Runtime: win-x64 (self-contained)
+                  Executable: ${{ env.EXE_NAME }}
                   Executable Size: ${{ steps.filesize.outputs.size_mb }} MB
                   ZIP Size: ${{ steps.hash.outputs.zip_size_mb }} MB
                   SHA256: ${{ steps.hash.outputs.sha256 }}
@@ -217,9 +235,15 @@ jobs:
                   - ReadyToRun compilation for faster startup
                   - Full compatibility (no trimming issues)
                   - Compressed native libraries
+                  - Real-time Windows Event Log monitoring
+                  - Database mode with Entity Framework Core
+                  - Email integration with SMTP support
+                  - Multi-format export (TXT, JSON, Excel)
+                  - Automatic log archiving
 
                   Build Date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
                   Commit: ${{ github.sha }}
+                  Repository: ${{ github.repository }}
                   "@
 
                   $buildInfo | Out-File -FilePath ./publish/win-x64/BUILD_INFO.txt -Encoding utf8
@@ -253,13 +277,12 @@ jobs:
                   echo "version=$version" >> $env:GITHUB_OUTPUT
 
             - name: Create Release Notes
-              if: steps.changelog.outputs.found != 'true'
               run: |
                   $version = "${{ steps.version.outputs.version }}"
                   $notes = @"
-                  # ${{ env.ARTIFACT_NAME }} $version
+                  # AzioEventLog Analyzer $version
 
-                  ## 📦 Downloads
+                  ## Downloads
 
                   **Windows x64 (64-bit Intel/AMD)**
                   - Self-contained build (no .NET Runtime required)
@@ -267,29 +290,32 @@ jobs:
                   - Optimized for fast startup without trimming issues
                   - Size: ~85-95 MB (compressed ZIP)
 
-                  ## 🚀 Installation
+                  ## Installation
 
-                  1. Download the ZIP file below
+                  1. Download the ``${{ env.ARTIFACT_NAME }}-$version-win-x64.zip`` file below
                   2. Extract to any folder
-                  3. Run ``LogAnalyzerForWindows.exe``
+                  3. Run ``${{ env.EXE_NAME }}``
                   4. (Optional) Run as Administrator for full access to Security logs
 
-                  ## ✨ Features
+                  ## Features
 
-                  - Real-time Windows Event Log monitoring
-                  - Database mode for historical analysis with pagination
-                  - Session-based filtering and export
-                  - Email integration (requires SMTP configuration)
-                  - Multi-format export (TXT, JSON)
-                  - Automatic log archiving with ZIP compression
+                  - **Real-time Windows Event Log monitoring** with live updates
+                  - **Database mode** for historical analysis with pagination and SQLite storage
+                  - **Session-based filtering** with advanced search capabilities
+                  - **Email integration** for alerts and reports (requires SMTP configuration)
+                  - **Multi-format export**: TXT, JSON
+                  - **Automatic log archiving** with ZIP compression
+                  - **Modern Avalonia UI** with Fluent design
+                  - **Configurable settings** stored in JSON
 
-                  ## 📋 Requirements
+                  ## Requirements
 
                   - **OS**: Windows 10 version 1809 or later / Windows 11
                   - **Architecture**: x64 (64-bit)
                   - **.NET Runtime**: Not required (self-contained)
                   - **Disk Space**: ~100 MB
                   - **RAM**: 256 MB minimum, 512 MB recommended
+                  - **Permissions**: Administrator rights for Security log access
 
                   ## ⚡ Performance
 
@@ -298,16 +324,33 @@ jobs:
                   - ✅ No trimming = full compatibility with EF Core and JSON serialization
                   - ✅ Optimized garbage collection (Server GC)
                   - ✅ Tiered compilation for runtime optimization
+                  - ✅ Embedded debug symbols for better diagnostics
 
-                  ## 🔒 Security
+                  ## Security
 
-                  - **SHA256 Checksum**: Available in artifact details
+                  - **SHA256 Checksum**: Available in artifact details and BUILD_INFO.txt
                   - Verify the hash after download to ensure file integrity
                   - Supports running as Administrator for elevated log access
+                  - Encrypted credential storage using Windows Data Protection API
+                  - No telemetry or external data transmission
+
+                  ## Known Issues
+
+                  - First-time administrator access may require UAC prompt
+                  - Large event logs (100K+ entries) may take time to load in database mode
+
+                  ## Usage Tips
+
+                  - Use **Real-time mode** for monitoring current system events
+                  - Use **Database mode** for analyzing historical logs with filters
+                  - Configure SMTP settings for automated email alerts
+                  - Export to Excel for detailed analysis in spreadsheet applications
 
                   ---
 
-                  **Full Changelog**: https://github.com/${{ github.repository }}/compare/v1.0.0...$version
+                  **Full Changelog**: https://github.com/${{ github.repository }}/compare/v1.3.0...$version
+
+                  **Support**: For issues or questions, please visit [Issues](https://github.com/${{ github.repository }}/issues)
                   "@
 
                   $notes | Out-File -FilePath release_notes.md -Encoding utf8

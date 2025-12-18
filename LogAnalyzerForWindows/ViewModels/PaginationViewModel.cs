@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Collections;
@@ -21,9 +22,14 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
     private DateTime? _startDate;
     private DateTime? _endDate;
     private string? _currentSessionId;
+    private string? _searchText;
+    private int? _eventIdFilter;
+    private string? _sourceFilter;
 
     public AvaloniaList<LogEntry> CurrentPageLogs { get; private set; } = new();
     public AvaloniaList<int> PageSizes { get; } = new() { 25, 50, 100, 200, 500 };
+    public AvaloniaList<string> AvailableSources { get; } = new();
+    public AvaloniaList<int> AvailableEventIds { get; } = new();
 
     public int CurrentPage
     {
@@ -62,6 +68,51 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
         private set => SetProperty(ref _totalRecords, value);
     }
 
+    public string? SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+            {
+                OnPropertyChanged(nameof(HasActiveFilters));
+            }
+        }
+    }
+
+    public int? EventIdFilter
+    {
+        get => _eventIdFilter;
+        set
+        {
+            if (SetProperty(ref _eventIdFilter, value))
+            {
+                OnPropertyChanged(nameof(HasActiveFilters));
+                CurrentPage = 1;
+                _ = LoadLogsAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    public string? SourceFilter
+    {
+        get => _sourceFilter;
+        set
+        {
+            if (SetProperty(ref _sourceFilter, value))
+            {
+                OnPropertyChanged(nameof(HasActiveFilters));
+                CurrentPage = 1;
+                _ = LoadLogsAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    public bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_searchText) ||
+        _eventIdFilter.HasValue ||
+        !string.IsNullOrWhiteSpace(_sourceFilter);
+
     public string PageInfo => $"Page {CurrentPage} of {TotalPages} (Total: {TotalRecords} records)";
 
     private bool _isLoading;
@@ -77,6 +128,8 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
     public ICommand NextPageCommand { get; }
     public ICommand LastPageCommand { get; }
     public ICommand RefreshCommand { get; }
+    public ICommand SearchCommand { get; }
+    public ICommand ClearFiltersCommand { get; }
 
     public PaginationViewModel(ILogRepository repository)
     {
@@ -87,6 +140,30 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
         NextPageCommand = new RelayCommand(() => CurrentPage++, () => CurrentPage < TotalPages);
         LastPageCommand = new RelayCommand(() => CurrentPage = TotalPages, () => CurrentPage < TotalPages);
         RefreshCommand = new RelayCommand(async () => await LoadLogsAsync().ConfigureAwait(false));
+        SearchCommand = new RelayCommand(ExecuteSearch);
+        ClearFiltersCommand = new RelayCommand(ClearAllFilters);
+    }
+
+    private void ExecuteSearch()
+    {
+        CurrentPage = 1;
+        _ = LoadLogsAsync().ConfigureAwait(false);
+    }
+
+    private void ClearAllFilters()
+    {
+        _searchText = null;
+        _eventIdFilter = null;
+        _sourceFilter = null;
+        _levelFilter = null;
+
+        OnPropertyChanged(nameof(SearchText));
+        OnPropertyChanged(nameof(EventIdFilter));
+        OnPropertyChanged(nameof(SourceFilter));
+        OnPropertyChanged(nameof(HasActiveFilters));
+
+        CurrentPage = 1;
+        _ = LoadLogsAsync().ConfigureAwait(false);
     }
 
     public async Task LoadLogsAsync()
@@ -100,7 +177,10 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
                 _levelFilter,
                 _startDate,
                 _endDate,
-                _currentSessionId).ConfigureAwait(false);
+                _currentSessionId,
+                _searchText,
+                _eventIdFilter,
+                _sourceFilter).ConfigureAwait(false);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -112,14 +192,63 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
             });
 
             TotalRecords = totalCount;
-            TotalPages = (int)Math.Ceiling(totalCount / (double)PageSize);
+            TotalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)PageSize));
 
             OnPropertyChanged(nameof(PageInfo));
             UpdateCommandStates();
         }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Invalid operation while loading logs: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error while loading logs: {ex.Message}");
+        }
+        catch (OperationCanceledException ex)
+        {
+            Debug.WriteLine($"Loading logs was cancelled: {ex.Message}");
+        }
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    public async Task LoadFilterOptionsAsync()
+    {
+        try
+        {
+            var sources = await _repository.GetDistinctSourcesAsync(_currentSessionId).ConfigureAwait(false);
+            var eventIds = await _repository.GetDistinctEventIdsAsync(_currentSessionId).ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                AvailableSources.Clear();
+                AvailableSources.Add(string.Empty);
+                foreach (var source in sources)
+                {
+                    AvailableSources.Add(source);
+                }
+
+                AvailableEventIds.Clear();
+                foreach (var eventId in eventIds)
+                {
+                    AvailableEventIds.Add(eventId);
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Invalid operation while loading filter options: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error while loading filter options: {ex.Message}");
+        }
+        catch (OperationCanceledException ex)
+        {
+            Debug.WriteLine($"Loading filter options was cancelled: {ex.Message}");
         }
     }
 
@@ -130,6 +259,8 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
         _endDate = end;
         _currentSessionId = sessionId;
         CurrentPage = 1;
+
+        _ = LoadFilterOptionsAsync().ConfigureAwait(false);
         _ = LoadLogsAsync().ConfigureAwait(false);
     }
 

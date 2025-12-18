@@ -21,12 +21,14 @@ using LogAnalyzerForWindows.Models.Reader;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 using LogAnalyzerForWindows.Models.Writer;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
+using LogAnalyzerForWindows.Views;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
 internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IEmailService _emailService;
+    private readonly IDialogService _dialogService;
     private readonly IFileSystemService _fileSystemService;
     private readonly ILogMonitor _monitor;
     private readonly ILogRepository _logRepository;
@@ -40,9 +42,18 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     private ICommand? _stopCommand;
     private ICommand? _sendEmailCommand;
     private EventHandler<LogsChangedEventArgs>? _onLogsChangedHandler;
+    public bool IsMonitoring => _monitor.IsMonitoring;
 
     private readonly HashSet<LogEntry> _processedLogs = [];
     private CancellationTokenSource? _processingCts;
+
+    private DashboardViewModel? _dashboardViewModel;
+
+    public DashboardViewModel? DashboardViewModel
+    {
+        get => _dashboardViewModel;
+        private set => SetProperty(ref _dashboardViewModel, value);
+    }
 
     public AvaloniaList<string> LogSources { get; } = new();
     public AvaloniaList<string> LogLevels { get; private set; } = new();
@@ -148,7 +159,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private static string DefaultLogFolderPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LogAnalyzerForWindows");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "AzioEventLogAnalyzer");
 
     public static bool IsFolderExists => Directory.Exists(DefaultLogFolderPath);
 
@@ -164,6 +175,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         set => SetProperty(ref _stopCommand, value);
     }
 
+    private readonly ISettingsService _settingsService;
+    public ICommand OpenSettingsCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand OpenFolderCommand { get; }
     public ICommand ArchiveLatestFolderCommand { get; }
@@ -263,18 +276,23 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         IFileSystemService fileSystemService,
         ILogMonitor monitor,
         ILogRepository logRepository,
+        ISettingsService settingsService,
+        IDialogService dialogService,
         Func<ILogRepository, PaginationViewModel> paginationViewModelFactory)
     {
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
         _fileSystemService = fileSystemService ?? throw new ArgumentNullException(nameof(fileSystemService));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _paginationViewModelFactory = paginationViewModelFactory ??
                                       throw new ArgumentNullException(nameof(paginationViewModelFactory));
 
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
 
+        OpenSettingsCommand = new RelayCommand(async () => await OpenSettingsAsync().ConfigureAwait(false));
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
         SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
@@ -286,7 +304,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         );
 
         var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        var logPath = Path.Combine(documentsPath, "LogAnalyzerForWindows");
+        var logPath = Path.Combine(documentsPath, "AzioEventLogAnalyzer");
 
         if (!Directory.Exists(logPath))
         {
@@ -295,7 +313,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
         _folderWatcher = new FileSystemWatcher(documentsPath)
         {
-            Filter = "LogAnalyzerForWindows",
+            Filter = "AzioEventLogAnalyzer",
             NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName,
             IncludeSubdirectories = true
         };
@@ -332,117 +350,99 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _ = CheckDatabaseRecordsAsync();
 
         LoadAvailableLogSources();
+
+        DashboardViewModel = new DashboardViewModel(logRepository);
+        _ = DashboardViewModel.LoadSessionsAsync();
+        _ = DashboardViewModel.LoadDashboardDataAsync();
     }
 
     [SupportedOSPlatform("windows")]
-    private void LoadAvailableLogSources()
+    private async void LoadAvailableLogSources()
     {
-        Task.Run(() =>
+        try
         {
-            try
-            {
-                var sources = WindowsEventLogReader.GetAvailableLogNames();
+            var sources = await WindowsEventLogReader.GetAvailableLogNamesAsync().ConfigureAwait(false);
 
-                Dispatcher.UIThread.InvokeAsync(() =>
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LogSources.Clear();
+                foreach (var source in sources)
                 {
-                    LogSources.Clear();
-                    foreach (var source in sources)
-                    {
-                        LogSources.Add(source);
-                    }
+                    LogSources.Add(source);
+                }
 
-                    if (LogSources.Contains("System"))
-                    {
-                        SelectedLogSource = "System";
-                    }
-                    else if (LogSources.Count > 0)
-                    {
-                        SelectedLogSource = LogSources[0];
-                    }
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                Debug.WriteLine($"Invalid operation while loading log sources: {ex.Message}");
-            }
-            catch (IOException ex)
-            {
-                Debug.WriteLine($"IO error while loading log sources: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Unexpected error loading log sources: {ex.Message}");
-                throw;
-            }
-        });
+                if (LogSources.Contains("System"))
+                {
+                    SelectedLogSource = "System";
+                }
+                else if (LogSources.Count > 0)
+                {
+                    SelectedLogSource = LogSources[0];
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Invalid operation while loading log sources: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error while loading log sources: {ex.Message}");
+        }
     }
 
     [SupportedOSPlatform("windows")]
-    private void LoadAvailableLevelsForSource()
+    private async void LoadAvailableLevelsForSource()
     {
         if (string.IsNullOrEmpty(SelectedLogSource))
         {
             return;
         }
 
-        TextBlock = $"Loading available levels for {SelectedLogSource}...";
-        IsLoading = true;
-
-        Task.Run(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            try
-            {
-                var levels = WindowsEventLogReader.GetAvailableLevelsForLog(SelectedLogSource);
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var previousSelection = SelectedLogLevel;
-
-                    LogLevels.Clear();
-                    foreach (var level in levels)
-                    {
-                        LogLevels.Add(level);
-                    }
-
-                    if (!string.IsNullOrEmpty(previousSelection) && LogLevels.Contains(previousSelection))
-                    {
-                        SelectedLogLevel = previousSelection;
-                    }
-                    else if (LogLevels.Count > 0)
-                    {
-                        SelectedLogLevel = LogLevels[0];
-                    }
-
-                    TextBlock = $"Available levels loaded for {SelectedLogSource}";
-                    IsLoading = false;
-                });
-            }
-            catch (InvalidOperationException ex)
-            {
-                Debug.WriteLine($"Invalid operation while loading levels for {SelectedLogSource}: {ex.Message}");
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"Error loading levels: {ex.Message}";
-                    IsLoading = false;
-                });
-            }
-            catch (IOException ex)
-            {
-                Debug.WriteLine($"IO error while loading levels for {SelectedLogSource}: {ex.Message}");
-
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    TextBlock = $"Error loading levels: {ex.Message}";
-                    IsLoading = false;
-                });
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Unexpected error loading levels for {SelectedLogSource}: {ex.Message}");
-                throw;
-            }
+            TextBlock = $"Loading available levels for {SelectedLogSource}...";
+            IsLoading = true;
         });
+
+        try
+        {
+            var levels = await WindowsEventLogReader.GetAvailableLevelsForLogAsync(SelectedLogSource)
+                .ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var previousSelection = SelectedLogLevel;
+
+                LogLevels.Clear();
+                foreach (var level in levels)
+                {
+                    LogLevels.Add(level);
+                }
+
+                if (!string.IsNullOrEmpty(previousSelection) && LogLevels.Contains(previousSelection))
+                {
+                    SelectedLogLevel = previousSelection;
+                }
+                else if (LogLevels.Count > 0)
+                {
+                    SelectedLogLevel = LogLevels[0];
+                }
+
+                TextBlock = $"Available levels loaded for {SelectedLogSource}";
+                IsLoading = false;
+            });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            Debug.WriteLine($"Error loading levels for {SelectedLogSource}: {ex.Message}");
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                TextBlock = $"Error loading levels: {ex.Message}";
+                IsLoading = false;
+            });
+        }
     }
 
     private static async void InitializeDatabaseAsync()
@@ -926,7 +926,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             await _emailService.SendEmailAsync(
                 "Log Analysis Recipient",
                 UserEmail,
-                "Log Analyzer For Windows - Logs",
+                "AzioEventLogAnalyzer - Logs",
                 $"Please find the latest log archive attached ({Path.GetFileName(latestZipFile)}).",
                 latestZipFile).ConfigureAwait(false);
 
@@ -990,6 +990,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             (StopCommand as RelayCommand)?.OnCanExecuteChanged();
 
             OnPropertyChanged(nameof(CanToggleDatabaseMode));
+            OnPropertyChanged(nameof(IsMonitoring));
 
             if (_monitor.IsMonitoring)
             {
@@ -1010,6 +1011,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                !string.IsNullOrEmpty(SelectedSession) &&
                SelectedSession != "All Sessions" &&
                !string.IsNullOrEmpty(SelectedFormat);
+    }
+
+    private async Task OpenSettingsAsync()
+    {
+        var settingsVm = new SettingsViewModel(_settingsService, _emailService);
+        await _dialogService.ShowSettingsDialogAsync(settingsVm).ConfigureAwait(false);
     }
 
     private async Task ExportSessionLogsAsync()

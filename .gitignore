@@ -10,10 +10,36 @@ LogAnalyzerForWindows/obj
 
 .idea/
 
-
 # Environment variables
 .env
 .env.local
 .env.development
 .env.test
 .env.production
+
+## --- IDEs & Editors ---
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.iml
+*.csproj.iml
+/_ReSharper*/
+riderModule.iml
+
+# VS Code
+.vscode/
+
+## --- Dependencies ---
+/packages/
+
+## --- MSIX Packaging & Publishing (From CreateMSIX.ps1) ---
+publish/
+
+package/
+
+output/
