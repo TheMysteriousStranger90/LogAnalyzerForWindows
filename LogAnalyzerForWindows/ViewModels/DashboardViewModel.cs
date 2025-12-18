@@ -34,6 +34,9 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     private Axis[] _sourcesXAxes = [];
     private Axis[] _sourcesYAxes = [];
 
+    private Axis[] _eventIdsXAxes = [];
+    private Axis[] _eventIdsYAxes = [];
+
     public DashboardViewModel(ILogRepository repository)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
@@ -114,6 +117,18 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         private set => SetProperty(ref _timelineYAxes, value);
     }
 
+    public Axis[] EventIdsXAxes
+    {
+        get => _eventIdsXAxes;
+        private set => SetProperty(ref _eventIdsXAxes, value);
+    }
+
+    public Axis[] EventIdsYAxes
+    {
+        get => _eventIdsYAxes;
+        private set => SetProperty(ref _eventIdsYAxes, value);
+    }
+
     public ISeries[] TopSourcesSeries
     {
         get => _topSourcesSeries;
@@ -177,6 +192,27 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         ];
 
         SourcesYAxes =
+        [
+            new Axis
+            {
+                Name = "Count",
+                NamePaint = new SolidColorPaint(SKColors.White),
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+                MinLimit = 0
+            }
+        ];
+
+        EventIdsYAxes =
+        [
+            new Axis
+            {
+                Labels = [],
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+                TextSize = 12
+            }
+        ];
+
+        EventIdsXAxes =
         [
             new Axis
             {
@@ -363,24 +399,46 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         if (topEventIds.Count == 0)
         {
             TopEventIdsSeries = [];
+            EventIdsYAxes = [new Axis { Labels = [] }];
             return;
         }
 
-        var data = topEventIds
-            .Select(e => new { Label = $"ID: {e.EventId}", Value = e.Count })
-            .ToList();
+        var labels = topEventIds.Select(e => $"ID: {e.EventId}").ToArray();
+        var values = topEventIds.Select(e => e.Count).ToArray();
 
         TopEventIdsSeries =
         [
             new RowSeries<int>
             {
                 Name = "Event Count",
-                Values = data.Select(d => d.Value).ToArray(),
+                Values = values,
                 Fill = new SolidColorPaint(SKColors.Coral),
                 Stroke = null,
                 MaxBarWidth = 25,
                 DataLabelsPaint = new SolidColorPaint(SKColors.White),
-                DataLabelsPosition = LiveChartsCore.Measure.DataLabelsPosition.End
+                DataLabelsPosition = LiveChartsCore.Measure.DataLabelsPosition.End,
+                DataLabelsFormatter = point => point.Coordinate.PrimaryValue.ToString(CultureInfo.InvariantCulture)
+            }
+        ];
+
+        EventIdsYAxes =
+        [
+            new Axis
+            {
+                Labels = labels,
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+                TextSize = 11
+            }
+        ];
+
+        EventIdsXAxes =
+        [
+            new Axis
+            {
+                Name = "Count",
+                NamePaint = new SolidColorPaint(SKColors.White),
+                LabelsPaint = new SolidColorPaint(SKColors.LightGray),
+                MinLimit = 0
             }
         ];
     }
