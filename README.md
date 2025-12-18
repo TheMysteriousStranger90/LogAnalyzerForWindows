@@ -101,6 +101,10 @@ Bohdan Harabadzhyu
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Microsoft Store
+
+[![Get it from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/9NMBDKF5C8F9)
+
 ## SourceForge
 
 [![Download LogAnalyzerForWindows](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/loganalyzerforwindows/files/latest/download)
