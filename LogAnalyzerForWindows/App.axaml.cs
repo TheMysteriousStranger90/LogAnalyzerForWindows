@@ -96,22 +96,26 @@ internal sealed class App : Application
         services.AddDbContextFactory<LogAnalyzerDbContext>(options =>
         {
             options.UseSqlite(DbContextConfig.ConnectionString);
+            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         });
 
         services.AddSingleton<ISettingsService, SettingsService>();
-        services.AddSingleton<IDialogService, DialogService>();
-
         services.AddSingleton<ILogRepository, LogRepository>();
-        services.AddSingleton<IEmailService, EmailService>();
-        services.AddSingleton<IFileSystemService, FileSystemService>();
+        services.AddSingleton<ILogStatisticsService, LogStatisticsService>();
         services.AddSingleton<ILogMonitor, LogMonitor>();
         services.AddSingleton<ITrayIconService, TrayIconService>();
 
+        services.AddTransient<IDialogService, DialogService>();
+        services.AddTransient<IEmailService, EmailService>();
+        services.AddTransient<IFileSystemService, FileSystemService>();
+
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();
-        services.AddTransient<Func<ILogRepository, PaginationViewModel>>(sp =>
-            repository => new PaginationViewModel(repository));
         services.AddTransient<DashboardViewModel>();
+        services.AddTransient<PaginationViewModel>();
+
+        services.AddSingleton<Func<ILogRepository, PaginationViewModel>>(sp =>
+            repository => new PaginationViewModel(repository));
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)

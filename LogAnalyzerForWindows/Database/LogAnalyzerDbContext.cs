@@ -28,6 +28,7 @@ internal sealed class LogAnalyzerDbContext : DbContext
         modelBuilder.Entity<LogEntryEntity>(entity =>
         {
             entity.HasKey(e => e.Id);
+
             entity.Property(e => e.Timestamp);
             entity.Property(e => e.Level).HasMaxLength(50);
             entity.Property(e => e.Message);
@@ -36,11 +37,35 @@ internal sealed class LogAnalyzerDbContext : DbContext
             entity.Property(e => e.CreatedAt);
             entity.Property(e => e.SessionId).HasMaxLength(100);
 
-            entity.HasIndex(e => e.Timestamp);
-            entity.HasIndex(e => e.Level);
-            entity.HasIndex(e => e.EventId);
-            entity.HasIndex(e => e.Source);
-            entity.HasIndex(e => e.SessionId);
+            entity.HasIndex(e => new { e.SessionId, e.Timestamp })
+                .HasDatabaseName("IX_LogEntries_SessionId_Timestamp");
+
+            entity.HasIndex(e => new { e.SessionId, e.Level })
+                .HasDatabaseName("IX_LogEntries_SessionId_Level");
+
+            entity.HasIndex(e => new { e.SessionId, e.Source })
+                .HasDatabaseName("IX_LogEntries_SessionId_Source");
+
+            entity.HasIndex(e => new { e.Level, e.Timestamp })
+                .HasDatabaseName("IX_LogEntries_Level_Timestamp");
+
+            entity.HasIndex(e => e.Timestamp)
+                .HasDatabaseName("IX_LogEntries_Timestamp");
+
+            entity.HasIndex(e => e.Level)
+                .HasDatabaseName("IX_LogEntries_Level");
+
+            entity.HasIndex(e => e.EventId)
+                .HasDatabaseName("IX_LogEntries_EventId");
+
+            entity.HasIndex(e => e.Source)
+                .HasDatabaseName("IX_LogEntries_Source");
+
+            entity.HasIndex(e => e.SessionId)
+                .HasDatabaseName("IX_LogEntries_SessionId");
+
+            entity.HasIndex(e => e.CreatedAt)
+                .HasDatabaseName("IX_LogEntries_CreatedAt");
         });
     }
 }

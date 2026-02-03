@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
 using System.Windows.Input;
 using Avalonia.Threading;
 using LogAnalyzerForWindows.Commands;
@@ -9,7 +7,7 @@ using LogAnalyzerForWindows.Models;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
-internal sealed class SettingsViewModel : INotifyPropertyChanged
+internal sealed class SettingsViewModel : ViewModelBase
 {
     private readonly ISettingsService _settingsService;
     private readonly IEmailService _emailService;
@@ -33,19 +31,37 @@ internal sealed class SettingsViewModel : INotifyPropertyChanged
     public string SmtpServer
     {
         get => _smtpServer;
-        set => SetProperty(ref _smtpServer, value);
+        set
+        {
+            if (SetProperty(ref _smtpServer, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public int SmtpPort
     {
         get => _smtpPort;
-        set => SetProperty(ref _smtpPort, value);
+        set
+        {
+            if (SetProperty(ref _smtpPort, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public string FromEmail
     {
         get => _fromEmail;
-        set => SetProperty(ref _fromEmail, value);
+        set
+        {
+            if (SetProperty(ref _fromEmail, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public string FromName
@@ -57,7 +73,13 @@ internal sealed class SettingsViewModel : INotifyPropertyChanged
     public string Password
     {
         get => _password;
-        set => SetProperty(ref _password, value);
+        set
+        {
+            if (SetProperty(ref _password, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public bool UseTls
@@ -93,19 +115,37 @@ internal sealed class SettingsViewModel : INotifyPropertyChanged
     public bool IsSaving
     {
         get => _isSaving;
-        set => SetProperty(ref _isSaving, value);
+        set
+        {
+            if (SetProperty(ref _isSaving, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public bool IsTesting
     {
         get => _isTesting;
-        set => SetProperty(ref _isTesting, value);
+        set
+        {
+            if (SetProperty(ref _isTesting, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public string TestEmail
     {
         get => _testEmail;
-        set => SetProperty(ref _testEmail, value);
+        set
+        {
+            if (SetProperty(ref _testEmail, value))
+            {
+                UpdateCommandStates();
+            }
+        }
     }
 
     public ICommand SaveCommand { get; }
@@ -119,12 +159,12 @@ internal sealed class SettingsViewModel : INotifyPropertyChanged
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
 
-        SaveCommand = new RelayCommand(
-            async () => await SaveSettingsAsync().ConfigureAwait(false),
+        SaveCommand = new AsyncRelayCommand(
+            SaveSettingsAsync,
             () => !IsSaving && !IsTesting);
 
-        TestSmtpCommand = new RelayCommand(
-            async () => await TestSmtpConnectionAsync().ConfigureAwait(false),
+        TestSmtpCommand = new AsyncRelayCommand(
+            TestSmtpConnectionAsync,
             CanTestSmtp);
 
         ResetToDefaultCommand = new RelayCommand(ResetToDefault);
@@ -239,11 +279,7 @@ internal sealed class SettingsViewModel : INotifyPropertyChanged
         }
         finally
         {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                IsTesting = false;
-                (TestSmtpCommand as RelayCommand)?.OnCanExecuteChanged();
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => IsTesting = false);
         }
     }
 
@@ -263,26 +299,9 @@ internal sealed class SettingsViewModel : INotifyPropertyChanged
         StatusMessage = "Settings reset to defaults. Click Save to apply.";
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    private void UpdateCommandStates()
     {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        OnPropertyChanged(propertyName);
-
-        if (propertyName is nameof(SmtpServer) or nameof(SmtpPort) or nameof(FromEmail)
-            or nameof(Password) or nameof(TestEmail) or nameof(IsTesting) or nameof(IsSaving))
-        {
-            (TestSmtpCommand as RelayCommand)?.OnCanExecuteChanged();
-            (SaveCommand as RelayCommand)?.OnCanExecuteChanged();
-        }
-
-        return true;
-    }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        (TestSmtpCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
+        (SaveCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
     }
 }

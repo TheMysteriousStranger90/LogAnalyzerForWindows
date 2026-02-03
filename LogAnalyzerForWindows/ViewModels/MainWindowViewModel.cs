@@ -1,8 +1,7 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Mail;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Windows.Input;
 using Avalonia.Collections;
@@ -21,33 +20,44 @@ using LogAnalyzerForWindows.Models.Reader;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 using LogAnalyzerForWindows.Models.Writer;
 using LogAnalyzerForWindows.Models.Writer.Interfaces;
-using LogAnalyzerForWindows.Views;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
-internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
+internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly IEmailService _emailService;
     private readonly IDialogService _dialogService;
     private readonly IFileSystemService _fileSystemService;
     private readonly ILogMonitor _monitor;
     private readonly ILogRepository _logRepository;
+    private readonly ILogStatisticsService _statisticsService;
     private readonly FileSystemWatcher _folderWatcher;
     private readonly Func<ILogRepository, PaginationViewModel> _paginationViewModelFactory;
 
     private string _selectedLogLevel = string.Empty;
     private string _selectedLogSource = string.Empty;
     private string _selectedTime = string.Empty;
-    private ICommand? _startCommand;
-    private ICommand? _stopCommand;
     private ICommand? _sendEmailCommand;
     private EventHandler<LogsChangedEventArgs>? _onLogsChangedHandler;
-    public bool IsMonitoring => _monitor.IsMonitoring;
 
-    private readonly HashSet<LogEntry> _processedLogs = [];
+    private readonly ConcurrentDictionary<LogEntry, byte> _processedLogs = new();
     private CancellationTokenSource? _processingCts;
 
     private DashboardViewModel? _dashboardViewModel;
+    private string _textBlock = string.Empty;
+    private string _outputText = string.Empty;
+    private string _selectedFormat = "txt";
+    private bool _isLoading;
+    private bool _canSave;
+    private string _userEmail = string.Empty;
+    private string _currentSessionId = string.Empty;
+    private PaginationViewModel? _paginationViewModel;
+    private bool _useDatabaseMode;
+    private AvaloniaList<string> _availableSessions = new();
+    private string? _selectedSession;
+    private bool _hasDatabaseRecords;
+
+    public bool IsMonitoring => _monitor.IsMonitoring;
 
     public DashboardViewModel? DashboardViewModel
     {
@@ -60,15 +70,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days", "Last 7 days"];
     public AvaloniaList<string> Formats { get; } = ["txt", "json"];
 
-    private string _textBlock = string.Empty;
-
     public string TextBlock
     {
         get => _textBlock;
         set => SetProperty(ref _textBlock, value);
     }
-
-    private string _outputText = string.Empty;
 
     public string OutputText
     {
@@ -113,8 +119,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private string _selectedFormat = "txt";
-
     public string SelectedFormat
     {
         get => _selectedFormat;
@@ -123,12 +127,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             if (SetProperty(ref _selectedFormat, value))
             {
                 UpdateCanSaveState();
-                (ExportSessionCommand as RelayCommand)?.OnCanExecuteChanged();
+                (ExportSessionCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
-
-    private bool _isLoading;
 
     public bool IsLoading
     {
@@ -136,15 +138,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         set => SetProperty(ref _isLoading, value);
     }
 
-    private bool _canSave;
-
     public bool CanSave
     {
         get => _canSave;
         private set => SetProperty(ref _canSave, value);
     }
-
-    private string _userEmail = string.Empty;
 
     public string UserEmail
     {
@@ -153,7 +151,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         {
             if (SetProperty(ref _userEmail, value))
             {
-                (_sendEmailCommand as RelayCommand)?.OnCanExecuteChanged();
+                (_sendEmailCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
@@ -163,17 +161,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     public static bool IsFolderExists => Directory.Exists(DefaultLogFolderPath);
 
-    public ICommand? StartCommand
-    {
-        get => _startCommand;
-        set => SetProperty(ref _startCommand, value);
-    }
-
-    public ICommand? StopCommand
-    {
-        get => _stopCommand;
-        set => SetProperty(ref _stopCommand, value);
-    }
+    public ICommand StartCommand { get; }
+    public ICommand StopCommand { get; }
 
     private readonly ISettingsService _settingsService;
     public ICommand OpenSettingsCommand { get; }
@@ -182,52 +171,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ArchiveLatestFolderCommand { get; }
     public ICommand ExportSessionCommand { get; }
 
-    public ICommand SendEmailCommand => _sendEmailCommand ??= new RelayCommand(
-        async () => await SendEmailAsync().ConfigureAwait(false),
+    public ICommand SendEmailCommand => _sendEmailCommand ??= new AsyncRelayCommand(
+        SendEmailAsync,
         CanSendEmail
     );
-
-    private bool CanSendEmail()
-    {
-        if (!IsValidEmail(UserEmail)) return false;
-        try
-        {
-            return Directory.Exists(DefaultLogFolderPath) &&
-                   Directory.GetFiles(DefaultLogFolderPath, "*.zip").Length != 0;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Debug.WriteLine($"Access denied checking for zip files: {ex.Message}");
-            return false;
-        }
-        catch (IOException ex)
-        {
-            Debug.WriteLine($"IO error checking for zip files: {ex.Message}");
-            return false;
-        }
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-            return false;
-
-        try
-        {
-            var addr = new MailAddress(email);
-            return addr.Address == email;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    private string _currentSessionId = string.Empty;
-    private PaginationViewModel? _paginationViewModel;
-    private bool _useDatabaseMode;
-    private AvaloniaList<string> _availableSessions = new();
-    private string? _selectedSession;
 
     public PaginationViewModel? PaginationViewModel
     {
@@ -249,12 +196,10 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             if (SetProperty(ref _selectedSession, value))
             {
                 ApplySessionFilter();
-                (ExportSessionCommand as RelayCommand)?.OnCanExecuteChanged();
+                (ExportSessionCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
-
-    private bool _hasDatabaseRecords;
 
     public bool HasDatabaseRecords
     {
@@ -263,13 +208,38 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         {
             if (SetProperty(ref _hasDatabaseRecords, value))
             {
-                (ClearHistoryCommand as RelayCommand)?.OnCanExecuteChanged();
+                (ClearHistoryCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
 
     public ICommand ViewHistoryCommand { get; }
     public ICommand ClearHistoryCommand { get; }
+
+    public bool UseDatabaseMode
+    {
+        get => _useDatabaseMode;
+        set
+        {
+            if (SetProperty(ref _useDatabaseMode, value))
+            {
+                if (value)
+                {
+                    InitializeDatabaseMode();
+                }
+                else
+                {
+                    PaginationViewModel = null;
+                }
+
+                (StartCommand as RelayCommand)?.OnCanExecuteChanged();
+                (StopCommand as RelayCommand)?.OnCanExecuteChanged();
+                (ClearHistoryCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool CanToggleDatabaseMode => !_monitor.IsMonitoring;
 
     public MainWindowViewModel(
         IEmailService emailService,
@@ -278,6 +248,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         ILogRepository logRepository,
         ISettingsService settingsService,
         IDialogService dialogService,
+        ILogStatisticsService statisticsService,
         Func<ILogRepository, PaginationViewModel> paginationViewModelFactory)
     {
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
@@ -286,22 +257,22 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
         _paginationViewModelFactory = paginationViewModelFactory ??
                                       throw new ArgumentNullException(nameof(paginationViewModelFactory));
 
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
 
-        OpenSettingsCommand = new RelayCommand(async () => await OpenSettingsAsync().ConfigureAwait(false));
+        OpenSettingsCommand = new AsyncRelayCommand(OpenSettingsAsync);
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
         SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
         OpenFolderCommand = new RelayCommand(OpenLogFolder, () => IsFolderExists);
-        ArchiveLatestFolderCommand = new RelayCommand(ArchiveLogFolder, () => IsFolderExists);
-        ExportSessionCommand = new RelayCommand(
-            async () => await ExportSessionLogsAsync().ConfigureAwait(false),
-            CanExportSession
-        );
+        ArchiveLatestFolderCommand = new AsyncRelayCommand(ArchiveLogFolderAsync, () => IsFolderExists);
+        ExportSessionCommand = new AsyncRelayCommand(ExportSessionLogsAsync, CanExportSession);
+        ViewHistoryCommand = new AsyncRelayCommand(ViewHistoryAsync);
+        ClearHistoryCommand = new AsyncRelayCommand(ClearOldHistoryAsync, CanClearHistory);
 
         var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var logPath = Path.Combine(documentsPath, "AzioEventLogAnalyzer");
@@ -339,21 +310,50 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(IsFolderExists));
         UpdateCanSaveState();
 
-        ViewHistoryCommand = new RelayCommand(async () => await ViewHistoryAsync().ConfigureAwait(false));
-
-        ClearHistoryCommand = new RelayCommand(
-            async () => await ClearOldHistoryAsync().ConfigureAwait(false),
-            CanClearHistory
-        );
-
         InitializeDatabaseAsync();
         _ = CheckDatabaseRecordsAsync();
 
         LoadAvailableLogSources();
 
-        DashboardViewModel = new DashboardViewModel(logRepository);
+        DashboardViewModel = new DashboardViewModel(statisticsService);
         _ = DashboardViewModel.LoadSessionsAsync();
         _ = DashboardViewModel.LoadDashboardDataAsync();
+    }
+
+    private bool CanSendEmail()
+    {
+        if (!IsValidEmail(UserEmail)) return false;
+        try
+        {
+            return Directory.Exists(DefaultLogFolderPath) &&
+                   Directory.GetFiles(DefaultLogFolderPath, "*.zip").Length != 0;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Debug.WriteLine($"Access denied checking for zip files: {ex.Message}");
+            return false;
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error checking for zip files: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        try
+        {
+            var addr = new MailAddress(email);
+            return addr.Address == email;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     [SupportedOSPlatform("windows")]
@@ -528,31 +528,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public bool UseDatabaseMode
-    {
-        get => _useDatabaseMode;
-        set
-        {
-            if (SetProperty(ref _useDatabaseMode, value))
-            {
-                if (value)
-                {
-                    InitializeDatabaseMode();
-                }
-                else
-                {
-                    PaginationViewModel = null;
-                }
-
-                (StartCommand as RelayCommand)?.OnCanExecuteChanged();
-                (StopCommand as RelayCommand)?.OnCanExecuteChanged();
-                (ClearHistoryCommand as RelayCommand)?.OnCanExecuteChanged();
-            }
-        }
-    }
-
-    public bool CanToggleDatabaseMode => !_monitor.IsMonitoring;
-
     private bool CanClearHistory()
     {
         return UseDatabaseMode && HasDatabaseRecords;
@@ -560,7 +535,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void UpdateCanSaveState()
     {
-        CanSave = _processedLogs.Count != 0 && !string.IsNullOrEmpty(SelectedFormat);
+        CanSave = !_processedLogs.IsEmpty && !string.IsNullOrEmpty(SelectedFormat);
         (SaveCommand as RelayCommand)?.OnCanExecuteChanged();
     }
 
@@ -629,7 +604,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
 
             var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
-                .Where(_processedLogs.Add)
+                .Where(log => _processedLogs.TryAdd(log, 0))
                 .ToList();
 
             if (newUniqueLevelLogs.Count > 0)
@@ -640,6 +615,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                     {
                         await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
                         Debug.WriteLine($"Bulk saved {newUniqueLevelLogs.Count} logs to database");
+
+                        _statisticsService.InvalidateCache(_currentSessionId);
+
                         await CheckDatabaseRecordsAsync().ConfigureAwait(false);
 
                         if (DashboardViewModel != null)
@@ -674,7 +652,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                             await manager.ProcessLogsAsync(batch, _processingCts.Token).ConfigureAwait(false);
 
                             var matchingCount = _processedLogs.Count(l =>
-                                string.Equals(l.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
+                                string.Equals(l.Key.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
                             TextBlock =
                                 $"Monitoring {SelectedLogSource}... '{SelectedLogLevel}' logs: {matchingCount} " +
                                 $"(Processing batch {batchIndex / uiBatchSize + 1}/{(newUniqueLevelLogs.Count + uiBatchSize - 1) / uiBatchSize})";
@@ -691,7 +669,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     var matchingCount = _processedLogs.Count(l =>
-                        string.Equals(l.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(l.Key.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
                     TextBlock =
                         $"Monitoring {SelectedLogSource}... Unique '{SelectedLogLevel}' logs found: {matchingCount} (Session: {_currentSessionId})";
                 });
@@ -777,6 +755,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         {
             var deletedCount = await _logRepository.ClearAllLogsAsync().ConfigureAwait(false);
 
+            _statisticsService.InvalidateCache();
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 TextBlock = $"Deleted {deletedCount} log entries. Database cleared.";
@@ -789,6 +769,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 if (UseDatabaseMode && PaginationViewModel != null)
                 {
                     await PaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+                }
+
+                if (DashboardViewModel != null)
+                {
+                    await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
+                    await DashboardViewModel.LoadDashboardDataAsync().ConfigureAwait(false);
                 }
             }).ConfigureAwait(false);
         }
@@ -836,7 +822,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void SaveLogs()
     {
-        if (string.IsNullOrEmpty(SelectedFormat) || _processedLogs.Count == 0)
+        if (string.IsNullOrEmpty(SelectedFormat) || _processedLogs.IsEmpty)
         {
             TextBlock = "No logs to save or format not selected.";
             return;
@@ -856,7 +842,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                     _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
                 };
 
-                var linesToSave = _processedLogs.Select(log =>
+                var linesToSave = _processedLogs.Keys.Select(log =>
                 {
                     var formattedResult = formatter.Format(log);
                     return formattedResult.ToString() ?? string.Empty;
@@ -890,18 +876,20 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         _fileSystemService.OpenFolder(DefaultLogFolderPath, UpdateTextBlockOnUiThread);
     }
 
-    private void ArchiveLogFolder()
+    private async Task ArchiveLogFolderAsync()
     {
         TextBlock = "Archiving...";
         IsLoading = true;
-        Task.Run(() =>
+
+        await Task.Run(() =>
         {
             _fileSystemService.ArchiveLatestFolder(DefaultLogFolderPath, UpdateTextBlockOnUiThread);
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                IsLoading = false;
-                (_sendEmailCommand as RelayCommand)?.OnCanExecuteChanged();
-            });
+        }).ConfigureAwait(false);
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            IsLoading = false;
+            (_sendEmailCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
         });
     }
 
@@ -982,8 +970,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         {
             OnPropertyChanged(nameof(IsFolderExists));
             (OpenFolderCommand as RelayCommand)?.OnCanExecuteChanged();
-            (ArchiveLatestFolderCommand as RelayCommand)?.OnCanExecuteChanged();
-            (_sendEmailCommand as RelayCommand)?.OnCanExecuteChanged();
+            (ArchiveLatestFolderCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
+            (_sendEmailCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
         });
     }
 
@@ -1006,6 +994,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             {
                 TextBlock = "Monitoring stopped.";
                 IsLoading = false;
+
+                _statisticsService.InvalidateCache();
 
                 if (DashboardViewModel != null)
                 {
@@ -1152,24 +1142,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
         Dispatcher.UIThread.InvokeAsync(() => OutputText += text + Environment.NewLine);
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        OnPropertyChanged(propertyName);
-        return true;
-    }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-
     private bool _disposedValue;
 
-    private void Dispose(bool disposing)
+    private async void Dispose(bool disposing)
     {
         if (_disposedValue) return;
 
@@ -1182,8 +1157,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                     StopMonitoring();
                 }
 
-                _processingCts?.Cancel();
-                _processingCts?.Dispose();
+                if (_processingCts != null)
+                {
+                    await _processingCts.CancelAsync().ConfigureAwait(false);
+                    _processingCts.Dispose();
+                }
 
                 _monitor.MonitoringStarted -= OnMonitoringStateChanged;
                 _monitor.MonitoringStopped -= OnMonitoringStateChanged;
@@ -1198,6 +1176,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                 if (_monitor is IDisposable disposableMonitor)
                 {
                     disposableMonitor.Dispose();
+                }
+
+                if (DashboardViewModel != null)
+                {
+                    await DashboardViewModel.DisposeAsync().ConfigureAwait(false);
                 }
             }
             catch (ObjectDisposedException ex)

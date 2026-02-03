@@ -9,6 +9,13 @@ dotnet_diagnostic.CA2007.severity = suggestion
 dotnet_diagnostic.CA1515.severity = suggestion
 dotnet_diagnostic.CA1062.severity = suggestion
 
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1812.severity = none
+dotnet_diagnostic.CA1062.severity = none
+
 [*]
 charset = utf-8-bom
 end_of_line = crlf
