@@ -641,6 +641,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
                         await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
                         Debug.WriteLine($"Bulk saved {newUniqueLevelLogs.Count} logs to database");
                         await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+
+                        if (DashboardViewModel != null)
+                        {
+                            await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
+                        }
                     }
                     catch (InvalidOperationException ex)
                     {
@@ -984,7 +989,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnMonitoringStateChanged(object? sender, EventArgs e)
     {
-        Dispatcher.UIThread.InvokeAsync(() =>
+        Dispatcher.UIThread.InvokeAsync(async () =>
         {
             (StartCommand as RelayCommand)?.OnCanExecuteChanged();
             (StopCommand as RelayCommand)?.OnCanExecuteChanged();
@@ -1001,6 +1006,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged, IDisposable
             {
                 TextBlock = "Monitoring stopped.";
                 IsLoading = false;
+
+                if (DashboardViewModel != null)
+                {
+                    await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
+                    await DashboardViewModel.LoadDashboardDataAsync().ConfigureAwait(false);
+                }
             }
         });
     }

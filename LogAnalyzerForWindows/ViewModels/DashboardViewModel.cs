@@ -306,16 +306,24 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
             ("Other", stats.OtherCount, SKColors.Gray)
         };
 
-        LevelPieSeries = data
-            .Where(d => d.Value > 0)
-            .Select(d => new PieSeries<int>
+        var filteredData = data.Where(d => d.Value > 0).ToList();
+
+        if (filteredData.Count == 0)
+        {
+            LevelPieSeries = [];
+            return;
+        }
+
+        LevelPieSeries = filteredData
+            .Select(d => new PieSeries<ObservableValue>
             {
                 Name = d.Name,
-                Values = new[] { d.Value },
+                Values = new ObservableValue[] { new(d.Value) },
                 Fill = new SolidColorPaint(d.Color),
-                DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Outer,
+                DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Middle,
                 DataLabelsPaint = new SolidColorPaint(SKColors.White),
-                DataLabelsFormatter = point => $"{d.Name}: {point.Coordinate.PrimaryValue}"
+                DataLabelsSize = 12,
+                DataLabelsFormatter = point => $"{d.Name} {d.Value}"
             })
             .Cast<ISeries>()
             .ToArray();
