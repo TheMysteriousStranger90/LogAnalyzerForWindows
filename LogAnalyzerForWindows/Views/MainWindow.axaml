@@ -24,8 +24,8 @@
         <TabControl Grid.Row="2" Margin="5">
             <TabControl.Styles>
                 <Style Selector="TabItem">
-                    <Setter Property="FontSize" Value="14"/>
-                    <Setter Property="Padding" Value="15,8"/>
+                    <Setter Property="FontSize" Value="14" />
+                    <Setter Property="Padding" Value="15,8" />
                 </Style>
             </TabControl.Styles>
 
@@ -46,7 +46,8 @@
 
                     <Grid Grid.Row="1" ColumnDefinitions="Auto, *">
                         <!-- Left Panel - Filters and Controls -->
-                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
                                       Margin="5,20,5,0">
                             <StackPanel Margin="10" Spacing="10" MinWidth="250">
                                 <TextBlock Text="Filters" FontWeight="Bold" FontSize="14" />
@@ -152,7 +153,7 @@
                                     <Label Content="Email:" VerticalAlignment="Center" MinWidth="60" />
                                     <TextBox Text="{Binding UserEmail}"
                                              MinWidth="160"
-                                             Watermark="email@example.com"/>
+                                             Watermark="email@example.com" />
                                 </StackPanel>
 
                                 <Button Command="{Binding SendEmailCommand}" Margin="0,10,0,0">
@@ -178,7 +179,7 @@
                                      FontFamily="Consolas, Courier New, Monospace"
                                      FontSize="12"
                                      Background="#1E1E1E"
-                                     Foreground="#D4D4D4"/>
+                                     Foreground="#D4D4D4" />
 
                             <!-- Database view with pagination -->
                             <Grid IsVisible="{Binding UseDatabaseMode}" RowDefinitions="Auto, Auto, *, Auto">
@@ -187,12 +188,20 @@
                                     <TextBlock Text="Session:" VerticalAlignment="Center" FontWeight="Bold" />
                                     <ComboBox ItemsSource="{Binding AvailableSessions}"
                                               SelectedItem="{Binding SelectedSession}"
-                                              MinWidth="300"/>
-                                    <TextBlock Text="{Binding PaginationViewModel.TotalRecords, StringFormat='Total: {0} logs'}"
-                                               VerticalAlignment="Center"
-                                               FontWeight="Bold"
-                                               Foreground="#0078D4"
-                                               Margin="10,0,0,0" />
+                                              MinWidth="300" />
+                                    <Button Command="{Binding DeleteSessionCommand}"
+                                            ToolTip.Tip="Delete selected session">
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                            <TextBlock Text="🗑️" FontSize="14" />
+                                            <TextBlock Text="Delete Session" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock
+                                        Text="{Binding PaginationViewModel.TotalRecords, StringFormat='Total: {0} logs'}"
+                                        VerticalAlignment="Center"
+                                        FontWeight="Bold"
+                                        Foreground="#0078D4"
+                                        Margin="10,0,0,0" />
                                 </StackPanel>
 
                                 <!-- Search Panel -->
@@ -202,35 +211,37 @@
                                             <TextBlock Text="🔍" VerticalAlignment="Center" FontSize="16" />
                                             <TextBox Text="{Binding PaginationViewModel.SearchText}"
                                                      Watermark="Search in messages..."
-                                                     MinWidth="300"/>
+                                                     MinWidth="300" />
                                             <Button Content="Search"
                                                     Command="{Binding PaginationViewModel.SearchCommand}"
-                                                    MinWidth="80"/>
+                                                    MinWidth="80" />
                                             <Button Content="Clear Filters"
                                                     Command="{Binding PaginationViewModel.ClearFiltersCommand}"
-                                                    MinWidth="100"/>
+                                                    MinWidth="100" />
                                         </StackPanel>
 
                                         <StackPanel Orientation="Horizontal" Spacing="20">
                                             <StackPanel Orientation="Horizontal" Spacing="5">
-                                                <TextBlock Text="Event ID:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                                <TextBlock Text="Event ID:" VerticalAlignment="Center"
+                                                           FontWeight="SemiBold" />
                                                 <ComboBox ItemsSource="{Binding PaginationViewModel.AvailableEventIds}"
                                                           SelectedItem="{Binding PaginationViewModel.EventIdFilter}"
-                                                          MinWidth="100"/>
+                                                          MinWidth="100" />
                                             </StackPanel>
 
                                             <StackPanel Orientation="Horizontal" Spacing="5">
-                                                <TextBlock Text="Source:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                                <TextBlock Text="Source:" VerticalAlignment="Center"
+                                                           FontWeight="SemiBold" />
                                                 <ComboBox ItemsSource="{Binding PaginationViewModel.AvailableSources}"
                                                           SelectedItem="{Binding PaginationViewModel.SourceFilter}"
-                                                          MinWidth="200"/>
+                                                          MinWidth="200" />
                                             </StackPanel>
 
                                             <TextBlock Text="⚡ Filters Active"
                                                        VerticalAlignment="Center"
                                                        Foreground="#FFFFFF"
                                                        FontWeight="Bold"
-                                                       IsVisible="{Binding PaginationViewModel.HasActiveFilters}"/>
+                                                       IsVisible="{Binding PaginationViewModel.HasActiveFilters}" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
@@ -248,44 +259,50 @@
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Timestamp"
                                                                 Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}"
-                                                                Width="155"/>
+                                                                Width="155" />
                                             <DataGridTextColumn Header="Event ID"
                                                                 Binding="{Binding EventId}"
-                                                                Width="75"/>
+                                                                Width="75" />
                                             <DataGridTextColumn Header="Level"
                                                                 Binding="{Binding Level}"
-                                                                Width="95"/>
+                                                                Width="95" />
                                             <DataGridTextColumn Header="Source"
                                                                 Binding="{Binding Source}"
-                                                                Width="180"/>
+                                                                Width="180" />
                                             <DataGridTextColumn Header="Message"
                                                                 Binding="{Binding Message}"
                                                                 Width="*"
-                                                                MinWidth="300"/>
+                                                                MinWidth="300" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </ScrollViewer>
 
                                 <!-- Pagination -->
-                                <Border Grid.Row="3" Background="#252525" CornerRadius="5" Padding="10" Margin="10,10,10,0">
+                                <Border Grid.Row="3" Background="#252525" CornerRadius="5" Padding="10"
+                                        Margin="10,10,10,0">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
-                                        <Button Content="⏮ First" Command="{Binding PaginationViewModel.FirstPageCommand}" Width="75"/>
-                                        <Button Content="◀ Prev" Command="{Binding PaginationViewModel.PreviousPageCommand}" Width="75"/>
+                                        <Button Content="⏮ First"
+                                                Command="{Binding PaginationViewModel.FirstPageCommand}" Width="75" />
+                                        <Button Content="◀ Prev"
+                                                Command="{Binding PaginationViewModel.PreviousPageCommand}" Width="75" />
                                         <Border Background="#333333" CornerRadius="3" Padding="10,5">
                                             <TextBlock Text="{Binding PaginationViewModel.PageInfo}"
                                                        VerticalAlignment="Center"
                                                        FontWeight="Bold"
                                                        MinWidth="180"
-                                                       TextAlignment="Center"/>
+                                                       TextAlignment="Center" />
                                         </Border>
-                                        <Button Content="Next ▶" Command="{Binding PaginationViewModel.NextPageCommand}" Width="75"/>
-                                        <Button Content="Last ⏭" Command="{Binding PaginationViewModel.LastPageCommand}" Width="75"/>
-                                        <Separator Width="1" Background="#555555" Margin="5,0"/>
-                                        <TextBlock Text="Per page:" VerticalAlignment="Center" Foreground="#AAAAAA"/>
+                                        <Button Content="Next ▶"
+                                                Command="{Binding PaginationViewModel.NextPageCommand}" Width="75" />
+                                        <Button Content="Last ⏭"
+                                                Command="{Binding PaginationViewModel.LastPageCommand}" Width="75" />
+                                        <Separator Width="1" Background="#555555" Margin="5,0" />
+                                        <TextBlock Text="Per page:" VerticalAlignment="Center" Foreground="#AAAAAA" />
                                         <ComboBox ItemsSource="{Binding PaginationViewModel.PageSizes}"
                                                   SelectedItem="{Binding PaginationViewModel.PageSize}"
-                                                  Width="75"/>
-                                        <Button Content="🔄 Refresh" Command="{Binding PaginationViewModel.RefreshCommand}" Width="85"/>
+                                                  Width="75" />
+                                        <Button Content="🔄 Refresh"
+                                                Command="{Binding PaginationViewModel.RefreshCommand}" Width="85" />
                                     </StackPanel>
                                 </Border>
                             </Grid>
@@ -295,9 +312,9 @@
                     <!-- Status Bar with Monitoring Indicator -->
                     <Grid Grid.Row="2">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="3"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="3"/>
+                            <RowDefinition Height="3" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="3" />
                         </Grid.RowDefinitions>
 
                         <!-- Monitoring Indicator Line (Top) -->
@@ -310,13 +327,13 @@
                                     <Style.Animations>
                                         <Animation Duration="0:0:2" IterationCount="Infinite">
                                             <KeyFrame Cue="0%">
-                                                <Setter Property="Opacity" Value="0.5"/>
+                                                <Setter Property="Opacity" Value="0.5" />
                                             </KeyFrame>
                                             <KeyFrame Cue="50%">
-                                                <Setter Property="Opacity" Value="1"/>
+                                                <Setter Property="Opacity" Value="1" />
                                             </KeyFrame>
                                             <KeyFrame Cue="100%">
-                                                <Setter Property="Opacity" Value="0.5"/>
+                                                <Setter Property="Opacity" Value="0.5" />
                                             </KeyFrame>
                                         </Animation>
                                     </Style.Animations>
@@ -344,13 +361,13 @@
                                     <Style.Animations>
                                         <Animation Duration="0:0:2" IterationCount="Infinite">
                                             <KeyFrame Cue="0%">
-                                                <Setter Property="Opacity" Value="0.5"/>
+                                                <Setter Property="Opacity" Value="0.5" />
                                             </KeyFrame>
                                             <KeyFrame Cue="50%">
-                                                <Setter Property="Opacity" Value="1"/>
+                                                <Setter Property="Opacity" Value="1" />
                                             </KeyFrame>
                                             <KeyFrame Cue="100%">
-                                                <Setter Property="Opacity" Value="0.5"/>
+                                                <Setter Property="Opacity" Value="0.5" />
                                             </KeyFrame>
                                         </Animation>
                                     </Style.Animations>
@@ -388,8 +405,8 @@
                             <TextBlock Text="Loading..."
                                        Foreground="White"
                                        FontSize="20"
-                                       FontWeight="Bold"/>
-                            <ProgressBar IsIndeterminate="True" Width="200" Height="6"/>
+                                       FontWeight="Bold" />
+                            <ProgressBar IsIndeterminate="True" Width="200" Height="6" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -397,7 +414,7 @@
 
             <!-- Dashboard Tab -->
             <TabItem Header="Dashboard">
-                <views:DashboardView DataContext="{Binding DashboardViewModel}"/>
+                <views:DashboardView DataContext="{Binding DashboardViewModel}" />
             </TabItem>
         </TabControl>
     </Grid>

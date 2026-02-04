@@ -170,6 +170,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public ICommand OpenFolderCommand { get; }
     public ICommand ArchiveLatestFolderCommand { get; }
     public ICommand ExportSessionCommand { get; }
+    public ICommand DeleteSessionCommand { get; }
 
     public ICommand SendEmailCommand => _sendEmailCommand ??= new AsyncRelayCommand(
         SendEmailAsync,
@@ -197,6 +198,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 ApplySessionFilter();
                 (ExportSessionCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
+                (DeleteSessionCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
@@ -273,6 +275,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenFolderCommand = new RelayCommand(OpenLogFolder, () => IsFolderExists);
         ArchiveLatestFolderCommand = new AsyncRelayCommand(ArchiveLogFolderAsync, () => IsFolderExists);
         ExportSessionCommand = new AsyncRelayCommand(ExportSessionLogsAsync, CanExportSession);
+        DeleteSessionCommand = new AsyncRelayCommand(DeleteSessionAsync, CanDeleteSession);
         ViewHistoryCommand = new AsyncRelayCommand(ViewHistoryAsync);
         ClearHistoryCommand = new AsyncRelayCommand(ClearOldHistoryAsync, CanClearHistory);
 
@@ -1082,6 +1085,70 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         } while (allLogs.Count < totalCount);
 
         return allLogs;
+    }
+
+    private bool CanDeleteSession()
+    {
+        return UseDatabaseMode &&
+               !string.IsNullOrEmpty(SelectedSession) &&
+               SelectedSession != "All Sessions";
+    }
+
+    private async Task DeleteSessionAsync()
+    {
+        if (string.IsNullOrEmpty(SelectedSession) || SelectedSession == "All Sessions")
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = "Please select a specific session to delete.");
+            return;
+        }
+
+        var sessionToDelete = SelectedSession;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            IsLoading = true;
+            TextBlock = $"Deleting session '{sessionToDelete}'...";
+        });
+
+        try
+        {
+            var deletedCount = await _logRepository.DeleteSessionAsync(sessionToDelete).ConfigureAwait(false);
+
+            _statisticsService.InvalidateCache(sessionToDelete);
+            _statisticsService.InvalidateCache();
+
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                TextBlock = $"Deleted {deletedCount} logs from session '{sessionToDelete}'.";
+
+                AvailableSessions.Remove(sessionToDelete);
+                SelectedSession = "All Sessions";
+
+                if (PaginationViewModel != null)
+                {
+                    await PaginationViewModel.LoadLogsAsync().ConfigureAwait(false);
+                }
+
+                if (DashboardViewModel != null)
+                {
+                    await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
+                    await DashboardViewModel.LoadDashboardDataAsync().ConfigureAwait(false);
+                }
+            });
+
+            await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            Debug.WriteLine($"Error deleting session: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = $"Error deleting session: {ex.Message}");
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
+        }
     }
 
     private void UpdateTextBlockOnUiThread(string message)

@@ -443,4 +443,19 @@ internal sealed class LogRepository : ILogRepository
 
         return query;
     }
+
+    public async Task<int> DeleteSessionAsync(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return 0;
+
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            return await context.LogEntries
+                .Where(e => e.SessionId == sessionId)
+                .ExecuteDeleteAsync()
+                .ConfigureAwait(false);
+        }
+    }
 }
