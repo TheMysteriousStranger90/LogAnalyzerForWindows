@@ -16,9 +16,6 @@ using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
 using LogAnalyzerForWindows.Models.Analyzer;
 using LogAnalyzerForWindows.Models.Reader;
-using LogAnalyzerForWindows.Models.Reader.Interfaces;
-using LogAnalyzerForWindows.Models.Writer;
-using LogAnalyzerForWindows.Models.Writer.Interfaces;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
@@ -33,6 +30,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ILogStatisticsService _statisticsService;
     private readonly FileSystemWatcher _folderWatcher;
     private readonly Func<ILogRepository, PaginationViewModel> _paginationViewModelFactory;
+    private readonly LogFormatter _formatter;
 
     private string _selectedLogLevel = string.Empty;
     private string _selectedLogSource = string.Empty;
@@ -264,6 +262,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
         _paginationViewModelFactory = paginationViewModelFactory ??
                                       throw new ArgumentNullException(nameof(paginationViewModelFactory));
+        _formatter = new LogFormatter();
 
         _monitor.MonitoringStarted += OnMonitoringStateChanged;
         _monitor.MonitoringStopped += OnMonitoringStateChanged;
@@ -570,12 +569,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         _currentSessionId = $"Session_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{SelectedLogSource}";
 
-        ILogReader reader = new WindowsEventLogReader(SelectedLogSource);
-        var generalAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
-        ILogFormatter formatter = new LogFormatter();
-        ILogWriter writer = new TextBoxLogWriter(formatter, UpdateOutputTextOnUiThread);
-
-        var manager = new LogManager(reader, generalAnalyzer, formatter, writer);
+        var reader = new WindowsEventLogReader(SelectedLogSource);
+        var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
 
         var timeSpan = SelectedTime switch
         {
@@ -604,9 +599,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_processingCts == null || _processingCts.IsCancellationRequested)
                 return;
 
-            var incomingLogs = args.Logs;
-            var relevantLogs = timeFilter.Filter(incomingLogs);
-            var levelAnalyzer = new LevelLogAnalyzer(SelectedLogLevel);
+            var relevantLogs = timeFilter.Filter(args.Logs);
 
             var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
                 .Where(log => _processedLogs.TryAdd(log, 0))
@@ -650,24 +643,22 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                     var batch = newUniqueLevelLogs.Skip(i).Take(uiBatchSize).ToList();
                     var batchIndex = i;
 
-                    await Dispatcher.UIThread.InvokeAsync(async () =>
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        try
-                        {
-                            UpdateCanSaveState();
-                            await manager.ProcessLogsAsync(batch, _processingCts.Token).ConfigureAwait(false);
+                        UpdateCanSaveState();
 
-                            var matchingCount = _processedLogs.Count(l =>
-                                string.Equals(l.Key.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
-                            TextBlock =
-                                $"Monitoring {SelectedLogSource}... '{SelectedLogLevel}' logs: {matchingCount} " +
-                                $"(Processing batch {batchIndex / uiBatchSize + 1}/{(newUniqueLevelLogs.Count + uiBatchSize - 1) / uiBatchSize})";
-                        }
-                        catch (OperationCanceledException)
+                        foreach (var log in batch)
                         {
-                            Debug.WriteLine("Processing cancelled");
+                            var formattedLog = _formatter.Format(log);
+                            OutputText += formattedLog + Environment.NewLine;
                         }
-                    }).ConfigureAwait(false);
+
+                        var matchingCount = _processedLogs.Count(l =>
+                            string.Equals(l.Key.Level, SelectedLogLevel, StringComparison.OrdinalIgnoreCase));
+                        TextBlock =
+                            $"Monitoring {SelectedLogSource}... '{SelectedLogLevel}' logs: {matchingCount} " +
+                            $"(Processing batch {batchIndex / uiBatchSize + 1}/{(newUniqueLevelLogs.Count + uiBatchSize - 1) / uiBatchSize})";
+                    });
 
                     await Task.Delay(10, _processingCts.Token).ConfigureAwait(false);
                 }
@@ -1154,11 +1145,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private void UpdateTextBlockOnUiThread(string message)
     {
         Dispatcher.UIThread.InvokeAsync(() => TextBlock = message);
-    }
-
-    private void UpdateOutputTextOnUiThread(string text)
-    {
-        Dispatcher.UIThread.InvokeAsync(() => OutputText += text + Environment.NewLine);
     }
 
     private bool _disposedValue;

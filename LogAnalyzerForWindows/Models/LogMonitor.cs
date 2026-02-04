@@ -67,9 +67,9 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
                 {
                     break;
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error reading logs: {ex.Message}");
+                    Debug.WriteLine($"Error reading logs: {ex.GetType().Name}: {ex.Message}");
                     try
                     {
                         await Task.Delay(ErrorRetryDelayMs, cancellationToken).ConfigureAwait(false);
@@ -90,9 +90,13 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
                 }
             }
         }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Critical error in producer: {ex.GetType().Name}: {ex.Message}");
+        }
         finally
         {
-            _logChannel.Writer.TryComplete();
+            _logChannel?.Writer.TryComplete();
         }
     }
 
@@ -110,15 +114,21 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error in LogsChanged handler: {ex.Message}");
+                    Debug.WriteLine($"Error in LogsChanged handler: {ex.GetType().Name}: {ex.Message}");
                 }
             }
         }
         catch (OperationCanceledException)
         {
+            // Normal cancellation
         }
         catch (ChannelClosedException)
         {
+            // Channel was closed
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Critical error in consumer: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
