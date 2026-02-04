@@ -4,17 +4,15 @@ using System.Text;
 using System.Text.Json;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
-using Microsoft.Win32;
 
 namespace LogAnalyzerForWindows.Services;
 
 internal sealed class SettingsService : ISettingsService
 {
     private const string SettingsFileName = "settings.json";
-    private const string AutoStartRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "AzioEventLogAnalyzer";
+    private const string TaskName = "AzioEventLogAnalyzer";
 
-    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
     };
@@ -60,12 +58,11 @@ internal sealed class SettingsService : ISettingsService
             };
 
             var json = JsonSerializer.Serialize(settingsToSave, JsonOptions);
-
             await File.WriteAllTextAsync(_settingsFilePath, json).ConfigureAwait(false);
 
             _cachedSettings = settings;
 
-            UpdateAutoStartRegistry(settings.General.AutoStartWithWindows);
+            await UpdateAutoStartTaskAsync(settings.General.AutoStartWithWindows).ConfigureAwait(false);
         }
         catch (IOException ex)
         {
@@ -86,6 +83,11 @@ internal sealed class SettingsService : ISettingsService
                !string.IsNullOrWhiteSpace(_cachedSettings.Smtp.Password);
     }
 
+    public bool IsAutoStartEnabled()
+    {
+        return CheckScheduledTaskExists();
+    }
+
     private void LoadSettings()
     {
         try
@@ -93,6 +95,7 @@ internal sealed class SettingsService : ISettingsService
             if (!File.Exists(_settingsFilePath))
             {
                 _cachedSettings = new AppSettings();
+                SyncAutoStartSetting();
                 return;
             }
 
@@ -103,6 +106,7 @@ internal sealed class SettingsService : ISettingsService
             {
                 loadedSettings.Smtp.Password = DecryptPassword(loadedSettings.Smtp.Password);
                 _cachedSettings = loadedSettings;
+                SyncAutoStartSetting();
             }
         }
         catch (JsonException ex)
@@ -117,6 +121,130 @@ internal sealed class SettingsService : ISettingsService
         }
     }
 
+    private void SyncAutoStartSetting()
+    {
+        _cachedSettings.General.AutoStartWithWindows = CheckScheduledTaskExists();
+    }
+
+    private static bool CheckScheduledTaskExists()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = $"/Query /TN \"{TaskName}\" /FO LIST",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null) return false;
+
+            process.WaitForExit(5000);
+            return process.ExitCode == 0;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error checking scheduled task: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static async Task UpdateAutoStartTaskAsync(bool enable)
+    {
+        try
+        {
+            if (enable)
+            {
+                await CreateScheduledTaskAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await DeleteScheduledTaskAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error updating auto-start task: {ex.Message}");
+            throw new InvalidOperationException($"Failed to update auto-start: {ex.Message}", ex);
+        }
+    }
+
+    private static async Task CreateScheduledTaskAsync()
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+        {
+            throw new InvalidOperationException("Cannot determine executable path");
+        }
+
+        await DeleteScheduledTaskAsync().ConfigureAwait(false);
+
+        var arguments = $"/Create /TN \"{TaskName}\" " +
+                        $"/TR \"\\\"{exePath}\\\"\" " +
+                        "/SC ONLOGON " +
+                        "/RL HIGHEST " +
+                        "/F " +
+                        "/DELAY 0000:30";
+
+        await RunSchtasksAsync(arguments).ConfigureAwait(false);
+        Debug.WriteLine($"Scheduled task '{TaskName}' created successfully");
+    }
+
+    private static async Task DeleteScheduledTaskAsync()
+    {
+        var arguments = $"/Delete /TN \"{TaskName}\" /F";
+
+        try
+        {
+            await RunSchtasksAsync(arguments).ConfigureAwait(false);
+            Debug.WriteLine($"Scheduled task '{TaskName}' deleted");
+        }
+        catch
+        {
+        }
+    }
+
+    private static async Task RunSchtasksAsync(string arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "schtasks.exe",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            throw new InvalidOperationException("Failed to start schtasks.exe");
+        }
+
+        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+        var error = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+
+        await process.WaitForExitAsync().ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
+        {
+            Debug.WriteLine($"schtasks output: {output}");
+            Debug.WriteLine($"schtasks error: {error}");
+
+            if (process.ExitCode == 1 && arguments.Contains("/Delete", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            throw new InvalidOperationException($"schtasks.exe failed with exit code {process.ExitCode}: {error}");
+        }
+    }
+
     private string EncryptPassword(string password)
     {
         if (string.IsNullOrEmpty(password))
@@ -125,10 +253,10 @@ internal sealed class SettingsService : ISettingsService
         try
         {
             var passwordBytes = Encoding.UTF8.GetBytes(password);
-            var encryptedBytes = ProtectedData.Protect(
+            var encryptedBytes = System.Security.Cryptography.ProtectedData.Protect(
                 passwordBytes,
                 _encryptionKey,
-                DataProtectionScope.CurrentUser);
+                System.Security.Cryptography.DataProtectionScope.CurrentUser);
             return Convert.ToBase64String(encryptedBytes);
         }
         catch (CryptographicException ex)
@@ -146,10 +274,10 @@ internal sealed class SettingsService : ISettingsService
         try
         {
             var encryptedBytes = Convert.FromBase64String(encryptedPassword);
-            var decryptedBytes = ProtectedData.Unprotect(
+            var decryptedBytes = System.Security.Cryptography.ProtectedData.Unprotect(
                 encryptedBytes,
                 _encryptionKey,
-                DataProtectionScope.CurrentUser);
+                System.Security.Cryptography.DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(decryptedBytes);
         }
         catch (FormatException ex)
@@ -161,36 +289,6 @@ internal sealed class SettingsService : ISettingsService
         {
             Debug.WriteLine($"Decryption failed: {ex.Message}");
             return string.Empty;
-        }
-    }
-
-    private static void UpdateAutoStartRegistry(bool enable)
-    {
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(AutoStartRegistryKey, writable: true);
-            if (key is null) return;
-
-            if (enable)
-            {
-                var exePath = Environment.ProcessPath;
-                if (!string.IsNullOrEmpty(exePath))
-                {
-                    key.SetValue(AppName, $"\"{exePath}\"");
-                }
-            }
-            else
-            {
-                key.DeleteValue(AppName, throwOnMissingValue: false);
-            }
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Debug.WriteLine($"Cannot modify registry: {ex.Message}");
-        }
-        catch (IOException ex)
-        {
-            Debug.WriteLine($"Registry IO error: {ex.Message}");
         }
     }
 }

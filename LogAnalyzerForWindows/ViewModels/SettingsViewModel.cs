@@ -183,7 +183,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         Password = settings.Smtp.Password;
         UseTls = settings.Smtp.UseTls;
 
-        AutoStartWithWindows = settings.General.AutoStartWithWindows;
+        AutoStartWithWindows = _settingsService.IsAutoStartEnabled();
         MinimizeToTray = settings.General.MinimizeToTray;
         StartMinimized = settings.General.StartMinimized;
 

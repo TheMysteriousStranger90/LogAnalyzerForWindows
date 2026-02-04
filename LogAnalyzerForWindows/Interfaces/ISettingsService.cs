@@ -9,4 +9,5 @@ internal interface ISettingsService
     SmtpSettings GetSmtpSettings();
     GeneralSettings GetGeneralSettings();
     bool IsSmtpConfigured();
+    bool IsAutoStartEnabled();
 }
