@@ -193,7 +193,6 @@
                                             ToolTip.Tip="Delete selected session">
                                         <StackPanel Orientation="Horizontal" Spacing="5">
                                             <TextBlock Text="🗑️" FontSize="14" />
-                                            <TextBlock Text="Delete Session" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Button>
                                     <TextBlock
