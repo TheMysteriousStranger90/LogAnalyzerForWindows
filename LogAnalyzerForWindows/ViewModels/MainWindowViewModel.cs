@@ -605,6 +605,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
             var newUniqueLevelLogs = levelAnalyzer.FilterByLevel(relevantLogs)
                 .Where(log => _processedLogs.TryAdd(log, 0))
+                .OrderBy(log => log.Timestamp)
                 .ToList();
 
             if (newUniqueLevelLogs.Count > 0)
@@ -842,11 +843,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                     _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
                 };
 
-                var linesToSave = _processedLogs.Keys.Select(log =>
-                {
-                    var formattedResult = formatter.Format(log);
-                    return formattedResult.ToString() ?? string.Empty;
-                });
+                var linesToSave = _processedLogs.Keys
+                    .OrderBy(log => log.Timestamp)
+                    .Select(log =>
+                    {
+                        var formattedResult = formatter.Format(log);
+                        return formattedResult.ToString() ?? string.Empty;
+                    });
 
                 var logsContent = string.Join(Environment.NewLine, linesToSave);
                 var filePath = LogPathHelper.GetLogFilePath(SelectedFormat);
@@ -1082,11 +1085,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                         _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
                     };
 
-                    var linesToSave = allLogs.Select(log =>
-                    {
-                        var formattedResult = formatter.Format(log);
-                        return formattedResult.ToString() ?? string.Empty;
-                    });
+                    var linesToSave = allLogs
+                        .OrderBy(log => log.Timestamp)
+                        .Select(log =>
+                        {
+                            var formattedResult = formatter.Format(log);
+                            return formattedResult.ToString() ?? string.Empty;
+                        });
 
                     var logsContent = string.Join(Environment.NewLine, linesToSave);
 
