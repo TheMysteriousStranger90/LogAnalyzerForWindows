@@ -12,7 +12,6 @@ using LogAnalyzerForWindows.Database.Repositories;
 using LogAnalyzerForWindows.Filter;
 using LogAnalyzerForWindows.Formatter;
 using LogAnalyzerForWindows.Formatter.Interfaces;
-using LogAnalyzerForWindows.Helpers;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
 using LogAnalyzerForWindows.Models.Analyzer;
@@ -27,6 +26,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly IEmailService _emailService;
     private readonly IDialogService _dialogService;
+    private readonly ILogExportService _exportService;
     private readonly IFileSystemService _fileSystemService;
     private readonly ILogMonitor _monitor;
     private readonly ILogRepository _logRepository;
@@ -46,7 +46,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private DashboardViewModel? _dashboardViewModel;
     private string _textBlock = string.Empty;
     private string _outputText = string.Empty;
-    private string _selectedFormat = "txt";
+    private string _selectedFormat = "TXT";
     private bool _isLoading;
     private bool _canSave;
     private string _userEmail = string.Empty;
@@ -68,7 +68,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public AvaloniaList<string> LogSources { get; } = new();
     public AvaloniaList<string> LogLevels { get; private set; } = new();
     public AvaloniaList<string> Times { get; } = ["Last hour", "Last 24 hours", "Last 3 days", "Last 7 days"];
-    public AvaloniaList<string> Formats { get; } = ["txt", "json"];
+    public AvaloniaList<string> Formats { get; } = ["TXT", "JSON"];
 
     public string TextBlock
     {
@@ -249,6 +249,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         ISettingsService settingsService,
         IDialogService dialogService,
         ILogStatisticsService statisticsService,
+        ILogExportService exportService,
         Func<ILogRepository, PaginationViewModel> paginationViewModelFactory)
     {
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
@@ -257,6 +258,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
         _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
         _paginationViewModelFactory = paginationViewModelFactory ??
                                       throw new ArgumentNullException(nameof(paginationViewModelFactory));
@@ -267,7 +269,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenSettingsCommand = new AsyncRelayCommand(OpenSettingsAsync);
         StartCommand = new RelayCommand(StartMonitoring, CanStartMonitoring);
         StopCommand = new RelayCommand(StopMonitoring, CanStopMonitoring);
-        SaveCommand = new RelayCommand(SaveLogs, () => CanSave);
+        SaveCommand = new AsyncRelayCommand(SaveLogsAsync, () => CanSave);
         OpenFolderCommand = new RelayCommand(OpenLogFolder, () => IsFolderExists);
         ArchiveLatestFolderCommand = new AsyncRelayCommand(ArchiveLogFolderAsync, () => IsFolderExists);
         ExportSessionCommand = new AsyncRelayCommand(ExportSessionLogsAsync, CanExportSession);
@@ -536,7 +538,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private void UpdateCanSaveState()
     {
         CanSave = !_processedLogs.IsEmpty && !string.IsNullOrEmpty(SelectedFormat);
-        (SaveCommand as RelayCommand)?.OnCanExecuteChanged();
+        (SaveCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
     }
 
     private bool CanStartMonitoring() =>
@@ -821,7 +823,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void SaveLogs()
+    private async Task SaveLogsAsync()
     {
         if (string.IsNullOrEmpty(SelectedFormat) || _processedLogs.IsEmpty)
         {
@@ -832,46 +834,26 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         TextBlock = "Saving logs...";
         IsLoading = true;
 
-        Task.Run(() =>
+        try
         {
-            try
-            {
-                ILogFormatter formatter = SelectedFormat.ToUpperInvariant() switch
-                {
-                    "JSON" => new JsonLogFormatter(),
-                    "TXT" => new LogFormatter(),
-                    _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
-                };
+            var filePath = await _exportService.ExportLogsAsync(
+                _processedLogs.Keys,
+                SelectedFormat
+            ).ConfigureAwait(false);
 
-                var linesToSave = _processedLogs.Keys
-                    .OrderBy(log => log.Timestamp)
-                    .Select(log =>
-                    {
-                        var formattedResult = formatter.Format(log);
-                        return formattedResult.ToString() ?? string.Empty;
-                    });
-
-                var logsContent = string.Join(Environment.NewLine, linesToSave);
-                var filePath = LogPathHelper.GetLogFilePath(SelectedFormat);
-                File.WriteAllText(filePath, logsContent);
-
-                Dispatcher.UIThread.InvokeAsync(() => TextBlock = $"Logs saved to: {filePath}");
-            }
-            catch (IOException ex)
-            {
-                Debug.WriteLine($"IO error saving logs: {ex.Message}");
-                Dispatcher.UIThread.InvokeAsync(() => TextBlock = $"Error saving logs: {ex.Message}");
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                Debug.WriteLine($"Access denied saving logs: {ex.Message}");
-                Dispatcher.UIThread.InvokeAsync(() => TextBlock = $"Access denied: {ex.Message}");
-            }
-            finally
-            {
-                Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
-            }
-        });
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = $"Logs saved to: {filePath}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Debug.WriteLine($"Error saving logs: {ex.Message}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = $"Error saving logs: {ex.Message}");
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
+        }
     }
 
     private void OpenLogFolder()
@@ -1040,29 +1022,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         try
         {
-            var allLogs = new List<LogEntry>();
-            var pageSize = 1000;
-            var currentPage = 1;
-            int totalCount;
-
-            do
-            {
-                var (logs, count) = await _logRepository.GetLogsAsync(
-                    currentPage,
-                    pageSize,
-                    levelFilter: null,
-                    startDate: null,
-                    endDate: null,
-                    sessionId: SelectedSession
-                ).ConfigureAwait(false);
-
-                allLogs.AddRange(logs);
-                totalCount = count;
-                currentPage++;
-
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                    TextBlock = $"Loading session logs... {allLogs.Count}/{totalCount}");
-            } while (allLogs.Count < totalCount);
+            var allLogs = await LoadAllSessionLogsAsync(SelectedSession).ConfigureAwait(false);
 
             if (allLogs.Count == 0)
             {
@@ -1074,67 +1034,54 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            await Task.Run(() =>
-            {
-                try
-                {
-                    ILogFormatter formatter = SelectedFormat.ToUpperInvariant() switch
-                    {
-                        "JSON" => new JsonLogFormatter(),
-                        "TXT" => new LogFormatter(),
-                        _ => throw new InvalidOperationException($"Unknown format: {SelectedFormat}")
-                    };
+            var filePath = await _exportService.ExportLogsAsync(
+                allLogs,
+                SelectedFormat,
+                SelectedSession
+            ).ConfigureAwait(false);
 
-                    var linesToSave = allLogs
-                        .OrderBy(log => log.Timestamp)
-                        .Select(log =>
-                        {
-                            var formattedResult = formatter.Format(log);
-                            return formattedResult.ToString() ?? string.Empty;
-                        });
-
-                    var logsContent = string.Join(Environment.NewLine, linesToSave);
-
-                    var safeSessionName = string.Join("_",
-                        SelectedSession.Split(Path.GetInvalidFileNameChars()));
-                    var fileName = $"{safeSessionName}.{SelectedFormat}";
-                    var filePath = Path.Combine(DefaultLogFolderPath, fileName);
-
-                    File.WriteAllText(filePath, logsContent);
-
-                    Dispatcher.UIThread.InvokeAsync(() =>
-                        TextBlock = $"Exported {allLogs.Count} logs from session '{SelectedSession}' to: {filePath}");
-                }
-                catch (IOException ex)
-                {
-                    Debug.WriteLine($"IO error exporting session logs: {ex.Message}");
-                    Dispatcher.UIThread.InvokeAsync(() =>
-                        TextBlock = $"Error exporting logs: {ex.Message}");
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    Debug.WriteLine($"Access denied exporting session logs: {ex.Message}");
-                    Dispatcher.UIThread.InvokeAsync(() =>
-                        TextBlock = $"Access denied: {ex.Message}");
-                }
-            }).ConfigureAwait(false);
-        }
-        catch (InvalidOperationException ex)
-        {
-            Debug.WriteLine($"Error loading session logs: {ex.Message}");
             await Dispatcher.UIThread.InvokeAsync(() =>
-                TextBlock = $"Error loading session logs: {ex.Message}");
+                TextBlock = $"Exported {allLogs.Count} logs from session '{SelectedSession}' to: {filePath}");
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            Debug.WriteLine($"IO error loading session logs: {ex.Message}");
+            Debug.WriteLine($"Error exporting session logs: {ex.Message}");
             await Dispatcher.UIThread.InvokeAsync(() =>
-                TextBlock = $"IO error loading session logs: {ex.Message}");
+                TextBlock = $"Error exporting logs: {ex.Message}");
         }
         finally
         {
             await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
         }
+    }
+
+    private async Task<List<LogEntry>> LoadAllSessionLogsAsync(string sessionId)
+    {
+        var allLogs = new List<LogEntry>();
+        const int pageSize = 1000;
+        var currentPage = 1;
+        int totalCount;
+
+        do
+        {
+            var (logs, count) = await _logRepository.GetLogsAsync(
+                currentPage,
+                pageSize,
+                levelFilter: null,
+                startDate: null,
+                endDate: null,
+                sessionId: sessionId
+            ).ConfigureAwait(false);
+
+            allLogs.AddRange(logs);
+            totalCount = count;
+            currentPage++;
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                TextBlock = $"Loading session logs... {allLogs.Count}/{totalCount}");
+        } while (allLogs.Count < totalCount);
+
+        return allLogs;
     }
 
     private void UpdateTextBlockOnUiThread(string message)

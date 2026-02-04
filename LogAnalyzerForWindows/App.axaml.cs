@@ -104,6 +104,7 @@ internal sealed class App : Application
         services.AddSingleton<ILogStatisticsService, LogStatisticsService>();
         services.AddSingleton<ILogMonitor, LogMonitor>();
         services.AddSingleton<ITrayIconService, TrayIconService>();
+        services.AddSingleton<ILogExportService, LogExportService>();
 
         services.AddTransient<IDialogService, DialogService>();
         services.AddTransient<IEmailService, EmailService>();
