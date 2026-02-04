@@ -1,6 +1,5 @@
 ﻿using LogAnalyzerForWindows.Formatter;
 using LogAnalyzerForWindows.Formatter.Interfaces;
-using LogAnalyzerForWindows.Helpers;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
 
@@ -40,6 +39,7 @@ internal sealed class LogExportService : ILogExportService
         return await Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var formatter = formatterFactory();
             var sortedLogs = logsList.OrderBy(log => log.Timestamp);
             var formattedLines = sortedLogs.Select(log =>
@@ -49,9 +49,8 @@ internal sealed class LogExportService : ILogExportService
             });
 
             var content = string.Join(Environment.NewLine, formattedLines);
-            var filePath = string.IsNullOrEmpty(fileName)
-                ? LogPathHelper.GetLogFilePath(normalizedFormat)
-                : GetFilePathWithName(fileName, normalizedFormat);
+
+            var filePath = GetExportFilePath(normalizedFormat, fileName);
 
             var directory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -69,18 +68,38 @@ internal sealed class LogExportService : ILogExportService
         return string.Join(", ", FormatterFactories.Keys);
     }
 
-    private static string GetFilePathWithName(string fileName, string format)
+    private static string GetExportFilePath(string format, string? customFileName)
     {
-        var safeFileName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
-        if (!safeFileName.EndsWith($".{format}", StringComparison.OrdinalIgnoreCase))
-        {
-            safeFileName = $"{safeFileName}.{format}";
-        }
-
         var basePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "AzioEventLogAnalyzer");
 
-        return Path.Combine(basePath, safeFileName);
+        var dateFolder = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var targetFolder = Path.Combine(basePath, dateFolder);
+
+        if (!Directory.Exists(targetFolder))
+        {
+            Directory.CreateDirectory(targetFolder);
+        }
+
+        string fileName;
+        if (string.IsNullOrEmpty(customFileName))
+        {
+            var timestamp = DateTime.Now.ToString("HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            fileName = $"logs_{timestamp}.{format.ToUpperInvariant()}";
+        }
+        else
+        {
+            var safeFileName = string.Join("_", customFileName.Split(Path.GetInvalidFileNameChars()));
+
+            if (!safeFileName.EndsWith($".{format}", StringComparison.OrdinalIgnoreCase))
+            {
+                safeFileName = $"{safeFileName}.{format.ToUpperInvariant()}";
+            }
+
+            fileName = safeFileName;
+        }
+
+        return Path.Combine(targetFolder, fileName);
     }
 }
