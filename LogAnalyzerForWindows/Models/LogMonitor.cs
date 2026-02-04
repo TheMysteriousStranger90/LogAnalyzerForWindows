@@ -7,7 +7,7 @@ namespace LogAnalyzerForWindows.Models;
 
 internal sealed class LogMonitor : ILogMonitor, IDisposable
 {
-    private readonly Channel<IReadOnlyList<LogEntry>> _logChannel;
+    private Channel<IReadOnlyList<LogEntry>>? _logChannel;
     private CancellationTokenSource? _cts;
     private volatile bool _isMonitoring;
     private bool _disposedValue;
@@ -22,8 +22,12 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
     public event EventHandler? MonitoringStarted;
     public event EventHandler? MonitoringStopped;
 
-    public LogMonitor()
+    public void Monitor(ILogReader reader)
     {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (_isMonitoring) return;
+
         _logChannel = Channel.CreateBounded<IReadOnlyList<LogEntry>>(
             new BoundedChannelOptions(ChannelCapacity)
             {
@@ -31,14 +35,8 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
                 SingleReader = true,
                 SingleWriter = true
             });
-    }
 
-    public void Monitor(ILogReader reader)
-    {
-        ArgumentNullException.ThrowIfNull(reader);
-
-        if (_isMonitoring) return;
-
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _isMonitoring = true;
 
@@ -50,6 +48,8 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
 
     private async Task ProduceLogsAsync(ILogReader reader, CancellationToken cancellationToken)
     {
+        if (_logChannel == null) return;
+
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -98,6 +98,8 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
 
     private async Task ConsumeLogsAsync(CancellationToken cancellationToken)
     {
+        if (_logChannel == null) return;
+
         try
         {
             await foreach (var logs in _logChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
