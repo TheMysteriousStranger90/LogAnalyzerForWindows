@@ -11,7 +11,6 @@ using LogAnalyzerForWindows.Database;
 using LogAnalyzerForWindows.Database.Repositories;
 using LogAnalyzerForWindows.Filter;
 using LogAnalyzerForWindows.Formatter;
-using LogAnalyzerForWindows.Formatter.Interfaces;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
 using LogAnalyzerForWindows.Models.Analyzer;
@@ -19,7 +18,7 @@ using LogAnalyzerForWindows.Models.Reader;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
-internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
+internal sealed class MainWindowViewModel : ViewModelBase, IAsyncDisposable, IDisposable
 {
     private readonly IEmailService _emailService;
     private readonly IDialogService _dialogService;
@@ -87,7 +86,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedLogSource, value))
             {
-                LoadAvailableLevelsForSource();
+                _ = LoadAvailableLevelsForSourceAsync();
                 (StartCommand as RelayCommand)?.OnCanExecuteChanged();
             }
         }
@@ -314,14 +313,25 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsFolderExists));
         UpdateCanSaveState();
 
-        InitializeDatabaseAsync();
-        _ = CheckDatabaseRecordsAsync();
+        _ = InitializeAsync();
+    }
 
-        LoadAvailableLogSources();
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            await InitializeDatabaseAsync().ConfigureAwait(false);
+            await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+            await LoadAvailableLogSourcesAsync().ConfigureAwait(false);
 
-        DashboardViewModel = new DashboardViewModel(statisticsService);
-        _ = DashboardViewModel.LoadSessionsAsync();
-        _ = DashboardViewModel.LoadDashboardDataAsync();
+            DashboardViewModel = new DashboardViewModel(_statisticsService);
+            await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
+            await DashboardViewModel.LoadDashboardDataAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Initialization error: {ex.Message}");
+        }
     }
 
     private bool CanSendEmail()
@@ -361,7 +371,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     [SupportedOSPlatform("windows")]
-    private async void LoadAvailableLogSources()
+    private async Task LoadAvailableLogSourcesAsync()
     {
         try
         {
@@ -396,7 +406,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     [SupportedOSPlatform("windows")]
-    private async void LoadAvailableLevelsForSource()
+    private async Task LoadAvailableLevelsForSourceAsync()
     {
         if (string.IsNullOrEmpty(SelectedLogSource))
         {
@@ -449,7 +459,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private static async void InitializeDatabaseAsync()
+    private static async Task InitializeDatabaseAsync()
     {
         try
         {
@@ -608,31 +618,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
             if (newUniqueLevelLogs.Count > 0)
             {
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _logRepository.SaveLogsAsync(newUniqueLevelLogs, _currentSessionId).ConfigureAwait(false);
-                        Debug.WriteLine($"Bulk saved {newUniqueLevelLogs.Count} logs to database");
-
-                        _statisticsService.InvalidateCache(_currentSessionId);
-
-                        await CheckDatabaseRecordsAsync().ConfigureAwait(false);
-
-                        if (DashboardViewModel != null)
-                        {
-                            await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
-                        }
-                    }
-                    catch (InvalidOperationException ex)
-                    {
-                        Debug.WriteLine($"Error saving logs to database: {ex.Message}");
-                    }
-                    catch (IOException ex)
-                    {
-                        Debug.WriteLine($"IO error saving logs to database: {ex.Message}");
-                    }
-                }, _processingCts.Token);
+                _ = SaveLogsToDatabaseAsync(newUniqueLevelLogs);
 
                 const int uiBatchSize = 50;
                 for (int i = 0; i < newUniqueLevelLogs.Count; i += uiBatchSize)
@@ -660,7 +646,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                             $"(Processing batch {batchIndex / uiBatchSize + 1}/{(newUniqueLevelLogs.Count + uiBatchSize - 1) / uiBatchSize})";
                     });
 
-                    await Task.Delay(10, _processingCts.Token).ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(10, _processingCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
@@ -675,6 +668,32 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         _monitor.LogsChanged += _onLogsChangedHandler;
         _monitor.Monitor(reader);
+    }
+
+    private async Task SaveLogsToDatabaseAsync(List<LogEntry> logs)
+    {
+        try
+        {
+            await _logRepository.SaveLogsAsync(logs, _currentSessionId).ConfigureAwait(false);
+            Debug.WriteLine($"Bulk saved {logs.Count} logs to database");
+
+            _statisticsService.InvalidateCache(_currentSessionId);
+
+            await CheckDatabaseRecordsAsync().ConfigureAwait(false);
+
+            if (DashboardViewModel != null)
+            {
+                await DashboardViewModel.LoadSessionsAsync().ConfigureAwait(false);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine($"Error saving logs to database: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Debug.WriteLine($"IO error saving logs to database: {ex.Message}");
+        }
     }
 
     private async Task ViewHistoryAsync()
@@ -916,17 +935,17 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             Debug.WriteLine($"SMTP error sending email: {smtpEx.StatusCode} - {smtpEx.Message}");
 
             var userMessage = smtpEx.InnerException is SocketException
-                ? "Error sending email: Network connection issue or email server unavailable. Please check your internet connection and server status."
+                ? "Error sending email: Network connection issue or email server unavailable."
                 : smtpEx.StatusCode switch
                 {
                     SmtpStatusCode.MailboxUnavailable =>
                         "Error sending email: Recipient mailbox unavailable or does not exist.",
                     SmtpStatusCode.ServiceNotAvailable =>
-                        "Error sending email: Email service is temporarily unavailable. Please try again later.",
+                        "Error sending email: Email service is temporarily unavailable.",
                     SmtpStatusCode.ClientNotPermitted or SmtpStatusCode.TransactionFailed =>
-                        "Error sending email: Authentication failed or transaction rejected by the email server. Please check your email credentials and server policy.",
+                        "Error sending email: Authentication failed or transaction rejected.",
                     SmtpStatusCode.MustIssueStartTlsFirst =>
-                        "Error sending email: Secure connection (TLS) required by the server was not established.",
+                        "Error sending email: Secure connection (TLS) required but not established.",
                     _ => $"SMTP Error: {smtpEx.Message}"
                 };
 
@@ -954,9 +973,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private void OnMonitoringStateChanged(object? sender, EventArgs e)
+    private async void OnMonitoringStateChanged(object? sender, EventArgs e)
     {
-        Dispatcher.UIThread.InvokeAsync(async () =>
+        await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             (StartCommand as RelayCommand)?.OnCanExecuteChanged();
             (StopCommand as RelayCommand)?.OnCanExecuteChanged();
@@ -1149,57 +1168,87 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private bool _disposedValue;
 
-    private async void Dispose(bool disposing)
+    public async ValueTask DisposeAsync()
     {
         if (_disposedValue) return;
 
-        if (disposing)
+        try
         {
-            try
+            if (_monitor.IsMonitoring)
             {
-                if (_monitor.IsMonitoring)
-                {
-                    StopMonitoring();
-                }
-
-                if (_processingCts != null)
-                {
-                    await _processingCts.CancelAsync().ConfigureAwait(false);
-                    _processingCts.Dispose();
-                }
-
-                _monitor.MonitoringStarted -= OnMonitoringStateChanged;
-                _monitor.MonitoringStopped -= OnMonitoringStateChanged;
-
-                _folderWatcher.Created -= OnLogDirectoryChanged;
-                _folderWatcher.Deleted -= OnLogDirectoryChanged;
-                _folderWatcher.Renamed -= OnLogDirectoryChanged;
-                _folderWatcher.Changed -= OnLogDirectoryChanged;
-                _folderWatcher.EnableRaisingEvents = false;
-                _folderWatcher.Dispose();
-
-                if (_monitor is IDisposable disposableMonitor)
-                {
-                    disposableMonitor.Dispose();
-                }
-
-                if (DashboardViewModel != null)
-                {
-                    await DashboardViewModel.DisposeAsync().ConfigureAwait(false);
-                }
+                StopMonitoring();
             }
-            catch (ObjectDisposedException ex)
+
+            if (_processingCts != null)
             {
-                Debug.WriteLine($"Object already disposed during cleanup: {ex.Message}");
+                await _processingCts.CancelAsync().ConfigureAwait(false);
+                _processingCts.Dispose();
             }
+
+            _monitor.MonitoringStarted -= OnMonitoringStateChanged;
+            _monitor.MonitoringStopped -= OnMonitoringStateChanged;
+
+            _folderWatcher.Created -= OnLogDirectoryChanged;
+            _folderWatcher.Deleted -= OnLogDirectoryChanged;
+            _folderWatcher.Renamed -= OnLogDirectoryChanged;
+            _folderWatcher.Changed -= OnLogDirectoryChanged;
+            _folderWatcher.EnableRaisingEvents = false;
+            _folderWatcher.Dispose();
+
+            if (_monitor is IDisposable disposableMonitor)
+            {
+                disposableMonitor.Dispose();
+            }
+
+            if (DashboardViewModel != null)
+            {
+                await DashboardViewModel.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        catch (ObjectDisposedException ex)
+        {
+            Debug.WriteLine($"Object already disposed during cleanup: {ex.Message}");
         }
 
         _disposedValue = true;
+        GC.SuppressFinalize(this);
     }
 
     public void Dispose()
     {
-        Dispose(disposing: true);
+        if (_disposedValue) return;
+
+        try
+        {
+            if (_monitor.IsMonitoring)
+            {
+                StopMonitoring();
+            }
+
+            _processingCts?.Cancel();
+            _processingCts?.Dispose();
+
+            _monitor.MonitoringStarted -= OnMonitoringStateChanged;
+            _monitor.MonitoringStopped -= OnMonitoringStateChanged;
+
+            _folderWatcher.Created -= OnLogDirectoryChanged;
+            _folderWatcher.Deleted -= OnLogDirectoryChanged;
+            _folderWatcher.Renamed -= OnLogDirectoryChanged;
+            _folderWatcher.Changed -= OnLogDirectoryChanged;
+            _folderWatcher.EnableRaisingEvents = false;
+            _folderWatcher.Dispose();
+
+            if (_monitor is IDisposable disposableMonitor)
+            {
+                disposableMonitor.Dispose();
+            }
+        }
+        catch (ObjectDisposedException ex)
+        {
+            Debug.WriteLine($"Object already disposed during cleanup: {ex.Message}");
+        }
+
+        _disposedValue = true;
         GC.SuppressFinalize(this);
     }
 }
