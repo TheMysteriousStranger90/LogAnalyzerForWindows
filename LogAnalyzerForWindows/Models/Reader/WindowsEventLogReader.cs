@@ -433,7 +433,7 @@ internal sealed class WindowsEventLogReader : ILogReader
             System.Diagnostics.Debug.WriteLine($"Access denied for log '{_logName}': {ex.Message}");
         }
 
-        return logs.ToList();
+        return logs.OrderBy(l => l.Timestamp).ToList();
     }
 
     private static DateTime? ParseTimestamp(object? timeGeneratedValue)

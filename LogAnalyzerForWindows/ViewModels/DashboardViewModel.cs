@@ -1,7 +1,5 @@
-﻿using System.ComponentModel;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Collections;
 using Avalonia.Threading;
@@ -10,19 +8,21 @@ using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using LogAnalyzerForWindows.Commands;
-using LogAnalyzerForWindows.Database.Repositories;
+using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models;
 using SkiaSharp;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
-internal sealed class DashboardViewModel : INotifyPropertyChanged
+internal sealed class DashboardViewModel : ViewModelBase, IAsyncDisposable
 {
-    private readonly ILogRepository _repository;
+    private readonly ILogStatisticsService _statisticsService;
+    private CancellationTokenSource? _loadingCts;
     private bool _isLoading;
     private string? _selectedSession;
     private LogStatistics? _statistics;
     private string _statusMessage = "Ready";
+    private bool _disposedValue;
 
     private ISeries[] _levelPieSeries = [];
     private ISeries[] _timelineSeries = [];
@@ -33,22 +33,19 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     private Axis[] _timelineYAxes = [];
     private Axis[] _sourcesXAxes = [];
     private Axis[] _sourcesYAxes = [];
-
     private Axis[] _eventIdsXAxes = [];
     private Axis[] _eventIdsYAxes = [];
 
-    public DashboardViewModel(ILogRepository repository)
+    public DashboardViewModel(ILogStatisticsService statisticsService)
     {
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _statisticsService = statisticsService ?? throw new ArgumentNullException(nameof(statisticsService));
 
-        RefreshCommand = new RelayCommand(
+        RefreshCommand = new AsyncRelayCommand(
             async () => await LoadDashboardDataAsync().ConfigureAwait(false),
             () => !IsLoading);
 
         InitializeChartAxes();
     }
-
-    #region Properties
 
     public bool IsLoading
     {
@@ -57,7 +54,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         {
             if (SetProperty(ref _isLoading, value))
             {
-                (RefreshCommand as RelayCommand)?.OnCanExecuteChanged();
+                (RefreshCommand as AsyncRelayCommand)?.OnCanExecuteChanged();
             }
         }
     }
@@ -153,8 +150,6 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         private set => SetProperty(ref _topEventIdsSeries, value);
     }
 
-    #endregion
-
     public ICommand RefreshCommand { get; }
 
     private void InitializeChartAxes()
@@ -228,7 +223,7 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
     {
         try
         {
-            var sessions = await _repository.GetSessionIdsAsync().ConfigureAwait(false);
+            var sessions = await _statisticsService.GetSessionsAsync().ConfigureAwait(false);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -239,7 +234,10 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
                     AvailableSessions.Add(session);
                 }
 
-                SelectedSession = "All Sessions";
+                if (string.IsNullOrEmpty(SelectedSession))
+                {
+                    SelectedSession = "All Sessions";
+                }
             });
         }
         catch (Exception ex)
@@ -250,6 +248,15 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
 
     public async Task LoadDashboardDataAsync()
     {
+        if (_loadingCts != null)
+        {
+            await _loadingCts.CancelAsync().ConfigureAwait(false);
+            _loadingCts.Dispose();
+        }
+
+        _loadingCts = new CancellationTokenSource();
+        var token = _loadingCts.Token;
+
         IsLoading = true;
         StatusMessage = "Loading dashboard data...";
 
@@ -257,41 +264,52 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         {
             var sessionId = SelectedSession == "All Sessions" ? null : SelectedSession;
 
-            var stats = await _repository.GetDetailedStatisticsAsync(sessionId).ConfigureAwait(false);
-            Statistics = stats;
+            var statsTask = _statisticsService.GetStatisticsAsync(sessionId, token);
+            var timeSeriesTask = _statisticsService.GetTimeSeriesAsync(sessionId, TimeSpan.FromHours(1), token);
+            var topSourcesTask = _statisticsService.GetTopSourcesAsync(10, sessionId, token);
+            var topEventIdsTask = _statisticsService.GetTopEventIdsAsync(10, sessionId, token);
 
-            var timeSeries = await _repository.GetLogsTimeSeriesAsync(
-                sessionId,
-                groupBy: TimeSpan.FromHours(1)).ConfigureAwait(false);
+            await Task.WhenAll(statsTask, timeSeriesTask, topSourcesTask, topEventIdsTask).ConfigureAwait(false);
 
-            var topSources = await _repository.GetTopSourcesAsync(10, sessionId).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
 
-            var topEventIds = await _repository.GetTopEventIdsAsync(10, sessionId).ConfigureAwait(false);
+            var stats = await statsTask;
+            var timeSeries = await timeSeriesTask;
+            var topSources = await topSourcesTask;
+            var topEventIds = await topEventIdsTask;
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                Statistics = stats;
                 UpdateLevelPieChart(stats);
                 UpdateTimelineChart(timeSeries);
                 UpdateTopSourcesChart(topSources);
                 UpdateTopEventIdsChart(topEventIds);
 
-                OnPropertyChanged(nameof(TotalLogs));
-                OnPropertyChanged(nameof(ErrorCount));
-                OnPropertyChanged(nameof(WarningCount));
-                OnPropertyChanged(nameof(InformationCount));
+                OnPropertiesChanged(nameof(TotalLogs), nameof(ErrorCount), nameof(WarningCount),
+                    nameof(InformationCount));
 
                 StatusMessage = $"Dashboard loaded. Total: {stats.TotalLogs} logs";
             });
         }
+        catch (OperationCanceledException)
+        {
+            Debug.WriteLine("Dashboard loading was cancelled");
+        }
         catch (Exception ex)
         {
             Debug.WriteLine($"Error loading dashboard: {ex.Message}");
-            await Dispatcher.UIThread.InvokeAsync(() => { StatusMessage = $"Error: {ex.Message}"; });
+            await Dispatcher.UIThread.InvokeAsync(() => StatusMessage = $"Error: {ex.Message}");
         }
         finally
         {
             IsLoading = false;
         }
+    }
+
+    public void InvalidateCache()
+    {
+        _statisticsService.InvalidateCache();
     }
 
     private void UpdateLevelPieChart(LogStatistics stats)
@@ -306,16 +324,24 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
             ("Other", stats.OtherCount, SKColors.Gray)
         };
 
-        LevelPieSeries = data
-            .Where(d => d.Value > 0)
-            .Select(d => new PieSeries<int>
+        var filteredData = data.Where(d => d.Value > 0).ToList();
+
+        if (filteredData.Count == 0)
+        {
+            LevelPieSeries = [];
+            return;
+        }
+
+        LevelPieSeries = filteredData
+            .Select(d => new PieSeries<ObservableValue>
             {
                 Name = d.Name,
-                Values = new[] { d.Value },
+                Values = new ObservableValue[] { new(d.Value) },
                 Fill = new SolidColorPaint(d.Color),
-                DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Outer,
+                DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Middle,
                 DataLabelsPaint = new SolidColorPaint(SKColors.White),
-                DataLabelsFormatter = point => $"{d.Name}: {point.Coordinate.PrimaryValue}"
+                DataLabelsSize = 12,
+                DataLabelsFormatter = point => $"{d.Name} {d.Value}"
             })
             .Cast<ISeries>()
             .ToArray();
@@ -449,22 +475,24 @@ internal sealed class DashboardViewModel : INotifyPropertyChanged
         return value.Length <= maxLength ? value : value[..(maxLength - 3)] + "...";
     }
 
-    #region INotifyPropertyChanged
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    private async ValueTask DisposeAsyncCore()
     {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        OnPropertyChanged(propertyName);
-        return true;
+        if (!_disposedValue)
+        {
+            if (_loadingCts != null)
+            {
+                await _loadingCts.CancelAsync().ConfigureAwait(false);
+                _loadingCts.Dispose();
+                _loadingCts = null;
+            }
+
+            _disposedValue = true;
+        }
     }
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    public async ValueTask DisposeAsync()
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        await DisposeAsyncCore().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
     }
-
-    #endregion
 }

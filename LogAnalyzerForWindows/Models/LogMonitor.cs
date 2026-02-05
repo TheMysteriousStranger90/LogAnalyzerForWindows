@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Threading.Channels;
 using LogAnalyzerForWindows.Interfaces;
 using LogAnalyzerForWindows.Models.Reader.Interfaces;
 
@@ -6,13 +7,14 @@ namespace LogAnalyzerForWindows.Models;
 
 internal sealed class LogMonitor : ILogMonitor, IDisposable
 {
-    private HashSet<LogEntry> _lastProcessedLogs = [];
+    private Channel<IReadOnlyList<LogEntry>>? _logChannel;
     private CancellationTokenSource? _cts;
     private volatile bool _isMonitoring;
     private bool _disposedValue;
 
     private const int PollingIntervalMs = 1000;
     private const int ErrorRetryDelayMs = 5000;
+    private const int ChannelCapacity = 100;
 
     public bool IsMonitoring => _isMonitoring;
 
@@ -26,51 +28,107 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
 
         if (_isMonitoring) return;
 
-        _lastProcessedLogs = [];
+        _logChannel = Channel.CreateBounded<IReadOnlyList<LogEntry>>(
+            new BoundedChannelOptions(ChannelCapacity)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = true
+            });
+
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _isMonitoring = true;
 
         MonitoringStarted?.Invoke(this, EventArgs.Empty);
 
-        _ = MonitorAsync(reader, _cts.Token);
+        _ = Task.Run(() => ProduceLogsAsync(reader, _cts.Token));
+        _ = Task.Run(() => ConsumeLogsAsync(_cts.Token));
     }
 
-    private async Task MonitorAsync(ILogReader reader, CancellationToken cancellationToken)
+    private async Task ProduceLogsAsync(ILogReader reader, CancellationToken cancellationToken)
     {
+        if (_logChannel == null) return;
+
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    var currentLogs = await reader.ReadLogsAsync(cancellationToken).ConfigureAwait(false);
+                    var logs = await reader.ReadLogsAsync(cancellationToken).ConfigureAwait(false);
 
-                    if (currentLogs.Count > 0)
+                    if (logs.Count > 0)
                     {
-                        var logsToProcess = currentLogs.ToList();
-                        _ = Task.Run(() => LogsChanged?.Invoke(this, new LogsChangedEventArgs(logsToProcess)), cancellationToken);
-                        _lastProcessedLogs = new HashSet<LogEntry>(currentLogs);
+                        await _logChannel.Writer.WriteAsync(logs, cancellationToken).ConfigureAwait(false);
                     }
                 }
-                catch (IOException ex)
+                catch (OperationCanceledException)
                 {
-                    Debug.WriteLine($"Error reading logs: {ex.Message}");
-                    await Task.Delay(ErrorRetryDelayMs, cancellationToken).ConfigureAwait(false);
-                    continue;
+                    break;
                 }
-                catch (UnauthorizedAccessException ex)
+                catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error reading logs: {ex.Message}");
-                    await Task.Delay(ErrorRetryDelayMs, cancellationToken).ConfigureAwait(false);
-                    continue;
+                    Debug.WriteLine($"Error reading logs: {ex.GetType().Name}: {ex.Message}");
+                    try
+                    {
+                        await Task.Delay(ErrorRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
 
-                await Task.Delay(PollingIntervalMs, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await Task.Delay(PollingIntervalMs, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Critical error in producer: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _logChannel?.Writer.TryComplete();
+        }
+    }
+
+    private async Task ConsumeLogsAsync(CancellationToken cancellationToken)
+    {
+        if (_logChannel == null) return;
+
+        try
+        {
+            await foreach (var logs in _logChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    LogsChanged?.Invoke(this, new LogsChangedEventArgs(logs));
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error in LogsChanged handler: {ex.GetType().Name}: {ex.Message}");
+                }
             }
         }
         catch (OperationCanceledException)
         {
             // Normal cancellation
+        }
+        catch (ChannelClosedException)
+        {
+            // Channel was closed
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Critical error in consumer: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -96,6 +154,7 @@ internal sealed class LogMonitor : ILogMonitor, IDisposable
                 StopMonitoring();
                 _cts?.Dispose();
             }
+
             _disposedValue = true;
         }
     }

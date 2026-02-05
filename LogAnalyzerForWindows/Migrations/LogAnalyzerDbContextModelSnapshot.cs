@@ -49,15 +49,35 @@ namespace LogAnalyzerForWindows.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EventId");
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_LogEntries_CreatedAt");
 
-                    b.HasIndex("Level");
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("IX_LogEntries_EventId");
 
-                    b.HasIndex("SessionId");
+                    b.HasIndex("Level")
+                        .HasDatabaseName("IX_LogEntries_Level");
 
-                    b.HasIndex("Source");
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("IX_LogEntries_SessionId");
 
-                    b.HasIndex("Timestamp");
+                    b.HasIndex("Source")
+                        .HasDatabaseName("IX_LogEntries_Source");
+
+                    b.HasIndex("Timestamp")
+                        .HasDatabaseName("IX_LogEntries_Timestamp");
+
+                    b.HasIndex("Level", "Timestamp")
+                        .HasDatabaseName("IX_LogEntries_Level_Timestamp");
+
+                    b.HasIndex("SessionId", "Level")
+                        .HasDatabaseName("IX_LogEntries_SessionId_Level");
+
+                    b.HasIndex("SessionId", "Source")
+                        .HasDatabaseName("IX_LogEntries_SessionId_Source");
+
+                    b.HasIndex("SessionId", "Timestamp")
+                        .HasDatabaseName("IX_LogEntries_SessionId_Timestamp");
 
                     b.ToTable("LogEntries");
                 });

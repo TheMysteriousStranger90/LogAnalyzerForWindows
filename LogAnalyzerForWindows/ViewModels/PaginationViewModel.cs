@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
 using System.Windows.Input;
 using Avalonia.Collections;
 using Avalonia.Threading;
@@ -10,7 +8,7 @@ using LogAnalyzerForWindows.Models;
 
 namespace LogAnalyzerForWindows.ViewModels;
 
-internal sealed class PaginationViewModel : INotifyPropertyChanged
+internal sealed class PaginationViewModel : ViewModelBase
 {
     private readonly ILogRepository _repository;
 
@@ -25,8 +23,9 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
     private string? _searchText;
     private int? _eventIdFilter;
     private string? _sourceFilter;
+    private bool _isLoading;
 
-    public AvaloniaList<LogEntry> CurrentPageLogs { get; private set; } = new();
+    public AvaloniaList<LogEntry> CurrentPageLogs { get; } = new();
     public AvaloniaList<int> PageSizes { get; } = new() { 25, 50, 100, 200, 500 };
     public AvaloniaList<string> AvailableSources { get; } = new();
     public AvaloniaList<int> AvailableEventIds { get; } = new();
@@ -115,8 +114,6 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
 
     public string PageInfo => $"Page {CurrentPage} of {TotalPages} (Total: {TotalRecords} records)";
 
-    private bool _isLoading;
-
     public bool IsLoading
     {
         get => _isLoading;
@@ -139,7 +136,7 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
         PreviousPageCommand = new RelayCommand(() => CurrentPage--, () => CurrentPage > 1);
         NextPageCommand = new RelayCommand(() => CurrentPage++, () => CurrentPage < TotalPages);
         LastPageCommand = new RelayCommand(() => CurrentPage = TotalPages, () => CurrentPage < TotalPages);
-        RefreshCommand = new RelayCommand(async () => await LoadLogsAsync().ConfigureAwait(false));
+        RefreshCommand = new AsyncRelayCommand(LoadLogsAsync);
         SearchCommand = new RelayCommand(ExecuteSearch);
         ClearFiltersCommand = new RelayCommand(ClearAllFilters);
     }
@@ -157,10 +154,7 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
         _sourceFilter = null;
         _levelFilter = null;
 
-        OnPropertyChanged(nameof(SearchText));
-        OnPropertyChanged(nameof(EventIdFilter));
-        OnPropertyChanged(nameof(SourceFilter));
-        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertiesChanged(nameof(SearchText), nameof(EventIdFilter), nameof(SourceFilter), nameof(HasActiveFilters));
 
         CurrentPage = 1;
         _ = LoadLogsAsync().ConfigureAwait(false);
@@ -270,20 +264,5 @@ internal sealed class PaginationViewModel : INotifyPropertyChanged
         (PreviousPageCommand as RelayCommand)?.OnCanExecuteChanged();
         (NextPageCommand as RelayCommand)?.OnCanExecuteChanged();
         (LastPageCommand as RelayCommand)?.OnCanExecuteChanged();
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        OnPropertyChanged(propertyName);
-        return true;
-    }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

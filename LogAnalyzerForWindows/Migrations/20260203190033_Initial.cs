@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace LogAnalyzerForWindows.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class Initial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -31,6 +31,11 @@ namespace LogAnalyzerForWindows.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_LogEntries_CreatedAt",
+                table: "LogEntries",
+                column: "CreatedAt");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LogEntries_EventId",
                 table: "LogEntries",
                 column: "EventId");
@@ -41,9 +46,29 @@ namespace LogAnalyzerForWindows.Migrations
                 column: "Level");
 
             migrationBuilder.CreateIndex(
+                name: "IX_LogEntries_Level_Timestamp",
+                table: "LogEntries",
+                columns: new[] { "Level", "Timestamp" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LogEntries_SessionId",
                 table: "LogEntries",
                 column: "SessionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LogEntries_SessionId_Level",
+                table: "LogEntries",
+                columns: new[] { "SessionId", "Level" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LogEntries_SessionId_Source",
+                table: "LogEntries",
+                columns: new[] { "SessionId", "Source" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LogEntries_SessionId_Timestamp",
+                table: "LogEntries",
+                columns: new[] { "SessionId", "Timestamp" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_LogEntries_Source",

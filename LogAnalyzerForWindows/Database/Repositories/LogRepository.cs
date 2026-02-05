@@ -50,41 +50,8 @@ internal sealed class LogRepository : ILogRepository
         {
             var query = context.LogEntries.AsNoTracking();
 
-            if (!string.IsNullOrWhiteSpace(levelFilter))
-            {
-                query = query.Where(e => e.Level == levelFilter);
-            }
-
-            if (startDate.HasValue)
-            {
-                query = query.Where(e => e.Timestamp >= startDate.Value);
-            }
-
-            if (endDate.HasValue)
-            {
-                query = query.Where(e => e.Timestamp <= endDate.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(sessionId))
-            {
-                query = query.Where(e => e.SessionId == sessionId);
-            }
-
-            if (!string.IsNullOrWhiteSpace(searchText))
-            {
-                var searchPattern = $"%{searchText}%";
-                query = query.Where(e => e.Message != null && EF.Functions.Like(e.Message, searchPattern));
-            }
-
-            if (eventIdFilter.HasValue)
-            {
-                query = query.Where(e => e.EventId == eventIdFilter.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(sourceFilter))
-            {
-                query = query.Where(e => e.Source == sourceFilter);
-            }
+            query = ApplyFilters(query, levelFilter, startDate, endDate, sessionId, searchText, eventIdFilter,
+                sourceFilter);
 
             var totalCount = await query.CountAsync().ConfigureAwait(false);
 
@@ -181,7 +148,9 @@ internal sealed class LogRepository : ILogRepository
         var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
         await using (context)
         {
-            return await context.Database.ExecuteSqlRawAsync("DELETE FROM LogEntries").ConfigureAwait(false);
+            return await context.LogEntries
+                .ExecuteDeleteAsync()
+                .ConfigureAwait(false);
         }
     }
 
@@ -213,7 +182,7 @@ internal sealed class LogRepository : ILogRepository
         var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (context.ConfigureAwait(false))
         {
-            var query = context.LogEntries.AsQueryable();
+            var query = context.LogEntries.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrEmpty(sessionId))
                 query = query.Where(l => l.SessionId == sessionId);
@@ -224,51 +193,70 @@ internal sealed class LogRepository : ILogRepository
             if (endDate.HasValue)
                 query = query.Where(l => l.Timestamp <= endDate.Value);
 
-            var logs = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-
-            var logsByLevel = logs
+            var levelCountsTask = query
                 .GroupBy(l => l.Level ?? "Unknown")
-                .ToDictionary(g => g.Key, g => g.Count());
+                .Select(g => new { Level = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Level, x => x.Count, cancellationToken);
 
-            var logsBySource = logs
-                .Where(l => !string.IsNullOrEmpty(l.Source))
+            var logsBySourceTask = query
+                .Where(l => l.Source != null)
                 .GroupBy(l => l.Source!)
-                .OrderByDescending(g => g.Count())
+                .Select(g => new { Source = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
                 .Take(15)
-                .ToDictionary(g => g.Key, g => g.Count());
+                .ToDictionaryAsync(x => x.Source, x => x.Count, cancellationToken);
 
-            var logsByHour = logs
-                .Where(l => l.Timestamp.HasValue)
-                .GroupBy(l => new DateTime(
-                    l.Timestamp!.Value.Year,
-                    l.Timestamp.Value.Month,
-                    l.Timestamp.Value.Day,
-                    l.Timestamp.Value.Hour, 0, 0))
-                .OrderBy(g => g.Key)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var logsByDay = logs
-                .Where(l => l.Timestamp.HasValue)
-                .GroupBy(l => l.Timestamp!.Value.Date)
-                .OrderBy(g => g.Key)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var topEventIds = logs
+            var topEventIdsTask = query
                 .Where(l => l.EventId.HasValue)
                 .GroupBy(l => l.EventId!.Value)
-                .OrderByDescending(g => g.Count())
+                .Select(g => new { EventId = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
                 .Take(10)
-                .ToDictionary(g => g.Key, g => g.Count());
+                .ToDictionaryAsync(x => x.EventId, x => x.Count, cancellationToken);
+
+            var logsByHourTask = query
+                .Where(l => l.Timestamp.HasValue)
+                .GroupBy(l => new
+                    { l.Timestamp!.Value.Year, l.Timestamp.Value.Month, l.Timestamp.Value.Day, l.Timestamp.Value.Hour })
+                .Select(g => new { Date = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Date.Year).ThenBy(x => x.Date.Month).ThenBy(x => x.Date.Day).ThenBy(x => x.Date.Hour)
+                .ToListAsync(cancellationToken);
+
+            var logsByDayTask = query
+                .Where(l => l.Timestamp.HasValue)
+                .GroupBy(l => new { l.Timestamp!.Value.Year, l.Timestamp.Value.Month, l.Timestamp.Value.Day })
+                .Select(g => new { Date = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Date.Year).ThenBy(x => x.Date.Month).ThenBy(x => x.Date.Day)
+                .ToListAsync(cancellationToken);
+
+            await Task.WhenAll(levelCountsTask, logsBySourceTask, topEventIdsTask, logsByHourTask, logsByDayTask)
+                .ConfigureAwait(false);
+
+            var levelCounts = await levelCountsTask;
+            var logsBySource = await logsBySourceTask;
+            var topEventIds = await topEventIdsTask;
+            var logsByHourRaw = await logsByHourTask;
+            var logsByDayRaw = await logsByDayTask;
+
+            var logsByHour = logsByHourRaw.ToDictionary(
+                x => new DateTime(x.Date.Year, x.Date.Month, x.Date.Day, x.Date.Hour, 0, 0),
+                x => x.Count);
+
+            var logsByDay = logsByDayRaw.ToDictionary(
+                x => new DateTime(x.Date.Year, x.Date.Month, x.Date.Day),
+                x => x.Count);
+
+            var totalCount = levelCounts.Values.Sum();
 
             return new LogStatistics
             {
-                TotalLogs = logs.Count,
-                ErrorCount = logsByLevel.GetValueOrDefault("Error", 0),
-                WarningCount = logsByLevel.GetValueOrDefault("Warning", 0),
-                InformationCount = logsByLevel.GetValueOrDefault("Information", 0),
-                AuditSuccessCount = logsByLevel.GetValueOrDefault("AuditSuccess", 0),
-                AuditFailureCount = logsByLevel.GetValueOrDefault("AuditFailure", 0),
-                OtherCount = logsByLevel.GetValueOrDefault("Other", 0) + logsByLevel.GetValueOrDefault("Unknown", 0),
+                TotalLogs = totalCount,
+                ErrorCount = levelCounts.GetValueOrDefault("Error", 0),
+                WarningCount = levelCounts.GetValueOrDefault("Warning", 0),
+                InformationCount = levelCounts.GetValueOrDefault("Information", 0),
+                AuditSuccessCount = levelCounts.GetValueOrDefault("AuditSuccess", 0),
+                AuditFailureCount = levelCounts.GetValueOrDefault("AuditFailure", 0),
+                OtherCount = levelCounts.GetValueOrDefault("Other", 0) + levelCounts.GetValueOrDefault("Unknown", 0),
                 LogsBySource = logsBySource,
                 LogsByHour = logsByHour,
                 LogsByDay = logsByDay,
@@ -287,7 +275,7 @@ internal sealed class LogRepository : ILogRepository
         var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (context.ConfigureAwait(false))
         {
-            var query = context.LogEntries.AsQueryable();
+            var query = context.LogEntries.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrEmpty(sessionId))
                 query = query.Where(l => l.SessionId == sessionId);
@@ -298,32 +286,52 @@ internal sealed class LogRepository : ILogRepository
             if (endDate.HasValue)
                 query = query.Where(l => l.Timestamp <= endDate.Value);
 
-            var logs = await query
-                .Where(l => l.Timestamp.HasValue)
-                .Select(l => l.Timestamp!.Value)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
             var interval = groupBy ?? TimeSpan.FromHours(1);
 
-            var grouped = logs
-                .GroupBy(t => new DateTime(
-                    t.Year, t.Month, t.Day,
-                    interval.TotalHours >= 24 ? 0 : t.Hour,
-                    interval.TotalMinutes >= 60 ? 0 : (t.Minute / (int)interval.TotalMinutes) * (int)interval.TotalMinutes,
-                    0))
-                .Select(g => new TimeSeriesPoint
-                {
-                    Time = g.Key,
-                    Count = g.Count(),
-                    Label = interval.TotalHours >= 24
-                        ? g.Key.ToString("dd MMM", CultureInfo.InvariantCulture)
-                        : g.Key.ToString("HH:mm", CultureInfo.InvariantCulture)
-                })
-                .OrderBy(p => p.Time)
-                .ToList();
+            List<TimeSeriesPoint> result;
 
-            return grouped;
+            if (interval.TotalHours >= 24)
+            {
+                var grouped = await query
+                    .Where(l => l.Timestamp.HasValue)
+                    .GroupBy(l => new { l.Timestamp!.Value.Year, l.Timestamp.Value.Month, l.Timestamp.Value.Day })
+                    .Select(g => new { Date = g.Key, Count = g.Count() })
+                    .OrderBy(x => x.Date.Year).ThenBy(x => x.Date.Month).ThenBy(x => x.Date.Day)
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                result = grouped.Select(g => new TimeSeriesPoint
+                {
+                    Time = new DateTime(g.Date.Year, g.Date.Month, g.Date.Day),
+                    Count = g.Count,
+                    Label = new DateTime(g.Date.Year, g.Date.Month, g.Date.Day).ToString("dd MMM",
+                        CultureInfo.InvariantCulture)
+                }).ToList();
+            }
+            else
+            {
+                var grouped = await query
+                    .Where(l => l.Timestamp.HasValue)
+                    .GroupBy(l => new
+                    {
+                        l.Timestamp!.Value.Year, l.Timestamp.Value.Month, l.Timestamp.Value.Day, l.Timestamp.Value.Hour
+                    })
+                    .Select(g => new { Date = g.Key, Count = g.Count() })
+                    .OrderBy(x => x.Date.Year).ThenBy(x => x.Date.Month).ThenBy(x => x.Date.Day)
+                    .ThenBy(x => x.Date.Hour)
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                result = grouped.Select(g => new TimeSeriesPoint
+                {
+                    Time = new DateTime(g.Date.Year, g.Date.Month, g.Date.Day, g.Date.Hour, 0, 0),
+                    Count = g.Count,
+                    Label = new DateTime(g.Date.Year, g.Date.Month, g.Date.Day, g.Date.Hour, 0, 0).ToString("HH:mm",
+                        CultureInfo.InvariantCulture)
+                }).ToList();
+            }
+
+            return result;
         }
     }
 
@@ -334,7 +342,7 @@ internal sealed class LogRepository : ILogRepository
         var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (context.ConfigureAwait(false))
         {
-            var query = context.LogEntries.AsQueryable();
+            var query = context.LogEntries.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrEmpty(sessionId))
                 query = query.Where(l => l.SessionId == sessionId);
@@ -355,7 +363,7 @@ internal sealed class LogRepository : ILogRepository
         var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (context.ConfigureAwait(false))
         {
-            var query = context.LogEntries.AsQueryable();
+            var query = context.LogEntries.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrEmpty(sessionId))
                 query = query.Where(l => l.SessionId == sessionId);
@@ -381,7 +389,7 @@ internal sealed class LogRepository : ILogRepository
         var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (context.ConfigureAwait(false))
         {
-            var query = context.LogEntries.AsQueryable();
+            var query = context.LogEntries.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrEmpty(sessionId))
                 query = query.Where(l => l.SessionId == sessionId);
@@ -396,6 +404,58 @@ internal sealed class LogRepository : ILogRepository
                 .ConfigureAwait(false);
 
             return result.Select(x => (x.EventId, x.Count)).ToList();
+        }
+    }
+
+    private static IQueryable<LogEntryEntity> ApplyFilters(
+        IQueryable<LogEntryEntity> query,
+        string? levelFilter,
+        DateTime? startDate,
+        DateTime? endDate,
+        string? sessionId,
+        string? searchText,
+        int? eventIdFilter,
+        string? sourceFilter)
+    {
+        if (!string.IsNullOrWhiteSpace(levelFilter))
+            query = query.Where(e => e.Level == levelFilter);
+
+        if (startDate.HasValue)
+            query = query.Where(e => e.Timestamp >= startDate.Value);
+
+        if (endDate.HasValue)
+            query = query.Where(e => e.Timestamp <= endDate.Value);
+
+        if (!string.IsNullOrWhiteSpace(sessionId))
+            query = query.Where(e => e.SessionId == sessionId);
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var searchPattern = $"%{searchText}%";
+            query = query.Where(e => e.Message != null && EF.Functions.Like(e.Message, searchPattern));
+        }
+
+        if (eventIdFilter.HasValue)
+            query = query.Where(e => e.EventId == eventIdFilter.Value);
+
+        if (!string.IsNullOrWhiteSpace(sourceFilter))
+            query = query.Where(e => e.Source == sourceFilter);
+
+        return query;
+    }
+
+    public async Task<int> DeleteSessionAsync(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return 0;
+
+        var context = await _contextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context)
+        {
+            return await context.LogEntries
+                .Where(e => e.SessionId == sessionId)
+                .ExecuteDeleteAsync()
+                .ConfigureAwait(false);
         }
     }
 }

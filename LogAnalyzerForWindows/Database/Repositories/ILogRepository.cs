@@ -50,4 +50,6 @@ internal interface ILogRepository
         int top = 10,
         string? sessionId = null,
         CancellationToken cancellationToken = default);
+
+    Task<int> DeleteSessionAsync(string sessionId);
 }
